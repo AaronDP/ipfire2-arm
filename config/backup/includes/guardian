@@ -1,0 +1,4 @@
+/var/ipfire/guardian/guardian.conf
+/var/ipfire/guardian/guardian.ignore
+/var/ipfire/guardian/guardian.target
+/var/ipfire/guardian/settings
