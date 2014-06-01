@@ -1,8 +1,9 @@
 usr/local/bin/guardian.pl
-usr/local/bin/guardian_block.sh
-usr/local/bin/guardian_unblock.sh
+usr/local/bin/guardianctrl
 var/ipfire/guardian
 var/ipfire/guardian/guardian.conf
 var/ipfire/guardian/guardian.ignore
+var/ipfire/guardian/guardian.target
+var/ipfire/guardian/settings
 var/log/guardian
 var/log/guardian/guardian.log
