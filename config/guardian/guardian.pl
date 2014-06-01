@@ -19,7 +19,7 @@ if (defined($opt_h)) {
 	print "guardian.pl [-hd] <-c config>\n";
 	print " -h  shows help\n";
 	print " -d  run in debug mode (doesn't fork, output goes to STDOUT)\n";
-	print " -c  specifiy a configuration file other than the default (/etc/guardian.conf)\n";
+	print " -c  specifiy a configuration file other than the default (/etc/guardian/guardian.conf)\n";
 	exit;
 }
 &load_conf;
@@ -66,20 +66,23 @@ if (!defined($opt_d)) {
 open (ALERT, $alert_file) or die "can't open alert file: $alert_file: $!\n";
 seek (ALERT, 0, 2); # set the position to EOF.
 # this is the same as a tail -f :)
-$counter=0;
 open (ALERT2, "/var/log/messages" ) or die "can't open /var/log/messages: $!\n";
 seek (ALERT2, 0, 2); # set the position to EOF.
 # this is the same as a tail -f :)
+open (ALERT3, "/var/log/httpd/error_log" ) or die "can't open /var/log/httpd/error_log: $!\n";
+seek (ALERT3, 0, 2); # set the position to EOF.
+# this is the same as a tail -f :)
+$counter=0;
 
 for (;;) {
 	sleep 1;
-	if (seek(ALERT,0,1)){
+	if (seek(ALERT,0,1)) {
 		while (<ALERT>) {
 			chop;
 			if (defined($opt_d)) {
 				print "$_\n";
 			}
-			if (/\[\*\*\]\s+(.*)\s+\[\*\*\]/){
+			if (/\[\*\*\]\s+(.*)\s+\[\*\*\]/) {
 				$type=$1;
 			}
 			if (/(\d+\.\d+\.\d+\.\d+):\d+ -\> (\d+\.\d+\.\d+\.\d+):\d+/) {
@@ -91,25 +94,27 @@ for (;;) {
 		}
 	}
 
-	sleep 1;
-	if (seek(ALERT2,0,1)){
+	if (seek(ALERT2,0,1)) {
 		while (<ALERT2>) {
 			chop;
-			if ($_=~/.*sshd.*Failed password for .* from.*/) {
-				my @array=split(/ /,$_);
-				my $temp = "";
-				if ( $array[11] eq "port" ) {
-					$temp = $array[10];
-				} elsif ( $array[11] eq "from" ) {
-					$temp = $array[12];
-				} else {
-					$temp = $array[11];
-				}
-				&checkssh ($temp, "possible SSH-Bruteforce Attack");}
+			if ($_=~/.*sshd.*Failed password for .* from (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).*/) {
+				&checkssh ($1, "possible SSH-Bruteforce Attack");}
 
 			# This should catch Bruteforce Attacks with enabled preauth
 			if ($_ =~ /.*sshd.*Received disconnect from (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):.*\[preauth\]/) {
 				&checkssh ($1, "possible SSH-Bruteforce Attack, failed preauth");}
+			}
+	}
+
+	if (seek(ALERT3,0,1)){
+		while (<ALERT3>) {
+			chop;
+			# This should catch Bruteforce Attacks on the WUI
+			if ($_ =~ /.*\[error\] \[client (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\] user(.*) not found:.*/) {
+				&checkhttp ($1, "possible WUI-Bruteforce Attack, wrong user".$2);}
+
+			if ($_ =~ /.*\[error\] \[client (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\] user(.*): authentication failure for.*/) {
+				&checkhttp ($1, "possible WUI-Bruteforce Attack, wrong password for".$2);}
 			}
 	}
 
@@ -118,6 +123,8 @@ for (;;) {
 		&remove_blocks; # This might get moved elsewhere, depending on how much load
 				# it puts on the system..
 		&check_log_name;
+		&check_log_ssh;
+		&check_log_http;
 		$counter=0;
 	} else {
 		$counter=$counter+1;
@@ -127,7 +134,7 @@ for (;;) {
 sub check_log_name {
 	my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,
 	$atime,$mtime,$ctime,$blksize,$blocks) = stat($alert_file);
-	if ($size < $previous_size) {   # The filesize is smaller than last
+	if ($size < $previous_size) {	     # The filesize is smaller than last
 		close (ALERT);               # we checked, so we need to reopen it
 		open (ALERT, "$alert_file"); # This should still work in our main while
 		$previous_size=$size;        # loop (I hope)
@@ -137,6 +144,31 @@ sub check_log_name {
 	}
 }
 
+sub check_log_ssh {
+	my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,
+	$atime,$mtime,$ctime,$blksize,$blocks) = stat("/var/log/messages");
+	if ($size < $previous_size_ssh) {			# The filesize is smaller than last
+		close (ALERT2);					# we checked, so we need to reopen it
+		open (ALERT2, "/var/log/messages");		# This should still work in our main while
+		$previous_size_ssh=$size;			# loop (I hope)
+		write_log ("Log filesize changed. Reopening /var/log/messages\n");
+	} else {
+		$previous_size_ssh=$size;
+	}
+}
+
+sub check_log_http {
+	my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,
+	$atime,$mtime,$ctime,$blksize,$blocks) = stat("/var/log/httpd/error_log");
+	if ($size < $previous_size_http) {			# The filesize is smaller than last
+		close (ALERT3);					# we checked, so we need to reopen it
+		open (ALERT3, "/var/log/httpd/error_log");	# This should still work in our main while
+		$previous_size_http=$size;			# loop (I hope)
+		write_log ("Log filesize changed. Reopening /var/log/httpd/error_log\n");
+	} else {
+		$previous_size_http=$size;
+	}
+}
 
 sub checkem {
 	my ($source, $dest,$type) = @_;
@@ -201,12 +233,45 @@ sub checkssh {
 	&write_log ("SSH Attack = $source, ssh count only $sshhash{$source} - No action done.\n");
 }
 
+sub checkhttp {
+	my ($source,$type) = @_;
+	my $flag=0;
+
+	return 1 if ($source eq $hostipaddr);
+	# this should prevent is from nuking ourselves
+
+	return 1 if ($source eq $gatewayaddr); # or our gateway
+
+	return 0 if ($httphash{$source} > 4); # allready blocked
+
+	if ( ($ignore{$source} == 1) ){
+		&write_log("Ignoring attack because $source is in my ignore list\n");
+		return 1;
+	}
+
+	if ($httphash{$source} == 4 ) {
+		&write_log ("source = $source, blocking for http attack.\n");
+		&ipchain ($source, "", $type);
+		$httphash{$source} = $httphash{$source}+1;
+		return 0;
+	}
+
+	if ($httphash{$source} eq "" ){
+		$httphash{$source} = 1;
+		&write_log ("HTTP Attack = $source, http count only $httphash{$source} - No action done.\n");
+		return 0;
+	}
+
+	$httphash{$source} = $httphash{$source}+1;
+	&write_log ("HTTP Attack = $source, http count only $httphash{$source} - No action done.\n");
+}
+
 sub ipchain {
 	my ($source, $dest, $type) = @_;
 	&write_log ("$source\t$type\n");
 	if ($hash{$source} eq "") {
-		&write_log ("Running '$blockpath $source $interface'\n");
-		system ("$blockpath $source $interface");
+		&write_log ("Running '$blockpath $source $block_interface'\n");
+		system ("$blockpath $source $block_interface");
 		$hash{$source} = time() + $TimeLimit;
 	} else {
 # We have already blocked this one, but snort detected another attack. So
@@ -246,7 +311,7 @@ sub build_ignore_hash {
 
 sub load_conf {
 	if ($opt_c eq "") {
-		$opt_c = "/etc/guardian.conf";
+		$opt_c = "/etc/guardian/guardian.conf";
 	}
 
 	if (! -e $opt_c) {
@@ -267,6 +332,9 @@ sub load_conf {
 				$interface = `cat /var/ipfire/ethernet/settings | grep RED_DEV | cut -d"=" -f2`;
 			}
 		}
+		if (/BlockInterface\s+(.*)/) {
+			$block_interface = $1;
+		}
 		if (/AlertFile\s+(.*)/) {
 			$alert_file = $1;
 		}
@@ -286,7 +354,11 @@ sub load_conf {
 			$hostgatewaybyte = $1;
 		}
 	}
-
+	
+	if ($block_interface eq "") {
+		print "Warning! BlockInterface is undefined.. using Interface: $interface\n";
+		$block_interface = $interface;
+	}
 	if ($alert_file eq "") {
 		print "Warning! AlertFile is undefined.. Assuming /var/log/snort.alert\n";
 		$alert_file="/var/log/snort.alert";
@@ -385,7 +457,7 @@ sub remove_blocks {
 sub call_unblock {
 	my ($source, $message) = @_;
 	&write_log ("$message");
-	system ("$unblockpath $source $interface");
+	system ("$unblockpath $source $block_interface");
 }
 
 sub clean_up_and_exit {
