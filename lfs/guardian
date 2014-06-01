@@ -57,11 +57,24 @@ dist:
 
 $(TARGET) : $(patsubst %,$(DIR_DL)/%,$(objects))
 	@$(PREBUILD)
-	-mkdir -p /var/ipfire/guardian /var/log/guardian
-	touch /var/log/guardian/guardian.log
+
+	# Create config directory and create files.
+	-mkdir -p /var/ipfire/guardian
 	touch /var/ipfire/guardian/guardian.ignore
+	touch /var/ipfire/guardian/guardian.target
+	touch /var/ipfire/guardian/settings
+
+	# Create directory and file for logging.
+	-mkdir pv /var/log/guardian
+	touch /var/log/guardian/guardian.log
+
+	# Install guardians config file.
 	install -v -m 644 $(DIR_SRC)/config/guardian/guardian.conf /var/ipfire/guardian/
+
+	# Install guardian.
 	install -v -m 755 $(DIR_SRC)/config/guardian/guardian.pl /usr/local/bin/
+
+	# Fix permissions to allow the webinterface to read and write the files.
 	chown nobody.nobody /var/ipfire/guardian
-	chown nobody.nobody /var/ipfire/guardian/{guardian.conf,guardian.ignore}
+	chown nobody.nobody /var/ipfire/guardian/{guardian.conf,guardian.ignore,guardian.target}
 	@$(POSTBUILD)
