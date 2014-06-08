@@ -47,8 +47,8 @@ int main(int argc, char *argv[]) {
         } else if (strcmp(argv[1], "block") == 0) {
 		if (argc == 3) {
 			char* ipaddress = argv[2];
-			if (!VALID_IP(ipaddress)) {
-				fprintf(stderr, "A valid IP address is required.\n");
+			if ((!VALID_IP(ipaddress)) && (!VALID_IP_AND_MASK(ipaddress))) {
+				fprintf(stderr, "A valid IP address or subnet is required.\n");
 				exit(1);
 			}
 
@@ -61,8 +61,8 @@ int main(int argc, char *argv[]) {
         } else if (strcmp(argv[1], "unblock") == 0) {
 		if (argc == 3) {
 			char* ipaddress = argv[2];
-			if (!VALID_IP(ipaddress)) {
-				fprintf(stderr, "A valid IP address is required.\n");
+			if ((!VALID_IP(ipaddress)) && (!VALID_IP_AND_MASK(ipaddress))) {
+				fprintf(stderr, "A valid IP address or subnet is required.\n");
 				exit(1);
 			}
 
