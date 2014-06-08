@@ -13,6 +13,8 @@ print "OS shows $OS\n";
 
 require 'getopts.pl';
 
+$guardianctrl = "/usr/local/bin/guardianctrl";
+
 &Getopts ('hc:d');
 if (defined($opt_h)) {
 	print "Guardian v1.7 \n";
@@ -270,8 +272,8 @@ sub ipchain {
 	my ($source, $dest, $type) = @_;
 	&write_log ("$source\t$type\n");
 	if ($hash{$source} eq "") {
-		&write_log ("Running '$blockpath $source $block_interface'\n");
-		system ("$blockpath $source $block_interface");
+		&write_log ("Running '$guardianctrl block $source'\n");
+		system ("$guardianctrl block $source");
 		$hash{$source} = time() + $TimeLimit;
 	} else {
 # We have already blocked this one, but snort detected another attack. So
@@ -383,23 +385,11 @@ sub load_conf {
 		$opt_d = 1;
 	}
 
-	foreach $mypath (split (/:/, $ENV{PATH})) {
-		if (-x "$mypath/guardian_block.sh") {
-		$blockpath = "$mypath/guardian_block.sh";
-		}
-		if (-x "$mypath/guardian_unblock.sh") {
-		$unblockpath = "$mypath/guardian_unblock.sh";
-		}
-	}
-
-	if ($blockpath eq "") {
-		print "Error! Could not find guardian_block.sh. Please consult the README. \n";
+	if (! -e $guardianctrl) {
+		print "Error! Could not find $guardianctrl. Exiting. \n";
 		exit;
 	}
-	if ($unblockpath eq "") {
-		print "Warning! Could not find guardian_unblock.sh. Guardian will not be\n";
-		print "able to remove blocked ip addresses. Please consult the README file\n";
-	}
+
 	if ($TimeLimit eq "") {
 		print "Warning! Time limit not defined. Defaulting to absurdly long time limit\n";
 		$TimeLimit = 999999999;
@@ -457,7 +447,7 @@ sub remove_blocks {
 sub call_unblock {
 	my ($source, $message) = @_;
 	&write_log ("$message");
-	system ("$unblockpath $source $block_interface");
+	system ("$guardianctrl unblock $source");
 }
 
 sub clean_up_and_exit {
