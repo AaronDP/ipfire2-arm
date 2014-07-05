@@ -23,7 +23,7 @@ if (defined($opt_h)) {
 &load_conf;
 &sig_handler_setup;
 
-print "My ip address and interface are: $hostipaddr $interface\n";
+&write_log ("My ip address and interface are: $hostipaddr $interface\n");
 
 if ($hostipaddr !~ /\d+\.\d+\.\d+\.\d+/) {
 	print "This ip address is bad : $hostipaddr\n";
@@ -37,7 +37,7 @@ $broadcastaddr = $hostipaddr;
 $broadcastaddr =~ s/\d+$/255/;
 &build_ignore_hash;
 
-print "My gatewayaddess is: $gatewayaddr\n";
+&write_log ("My gatewayaddess is: $gatewayaddr\n");
 
 # This is the target hash. If a packet was destened to any of these, then the
 # sender of that packet will get denied, unless it is on the ignore list..
@@ -56,10 +56,12 @@ if ( -e $targetfile ) {
 	&load_targetfile;
 }
 
-if (!defined($opt_d)) {
-	print "Becoming a daemon..\n";
+# Check if we are running in debug mode or we can deamonize.
+if (defined($opt_d)) {
+	&write_log ("Running in debug mode...\n");
+} else {
 	&daemonize;
-} else { print "Running in debug mode..\n"; }
+}
 
 open (ALERT, $alert_file) or die "can't open alert file: $alert_file: $!\n";
 seek (ALERT, 0, 2); # set the position to EOF.
@@ -354,23 +356,23 @@ sub load_conf {
 	}
 	
 	if ($block_interface eq "") {
-		print "Warning! BlockInterface is undefined.. using Interface: $interface\n";
+		&write_log ("Warning! BlockInterface is undefined.. using Interface: $interface\n");
 		$block_interface = $interface;
 	}
 	if ($alert_file eq "") {
-		print "Warning! AlertFile is undefined.. Assuming /var/log/snort.alert\n";
+		&write_log ("Warning! AlertFile is undefined.. Assuming /var/log/snort.alert\n");
 		$alert_file="/var/log/snort.alert";
 	}
 	if ($hostipaddr eq "") {
-		print "Warning! HostIpAddr is undefined! Attempting to guess..\n";
+		&write_log ("Warning! HostIpAddr is undefined! Attempting to guess..\n");
 		$hostipaddr = `cat /var/ipfire/red/local-ipaddress`;
-		print "Got it.. your HostIpAddr is $hostipaddr\n";
+		&write_log ("Got it.. your HostIpAddr is $hostipaddr\n");
 	}
 	if ($ignorefile eq "") {
-		print "Warning! IgnoreFile is undefined.. going with default ignore list (hostname and gateway)!\n";
+		&write_log ("Warning! IgnoreFile is undefined.. going with default ignore list (hostname and gateway)!\n");
 	}
 	if ($hostgatewaybyte eq "") {
-		print "Warning! HostGatewayByte is undefined.. gateway will not be in ignore list!\n";
+		&write_log ("Warning! HostGatewayByte is undefined.. gateway will not be in ignore list!\n");
 	}
 	if ($logfile eq "") {
 		print "Warning! LogFile is undefined.. Assuming debug mode, output to STDOUT\n";
@@ -387,7 +389,7 @@ sub load_conf {
 	}
 
 	if ($TimeLimit eq "") {
-		print "Warning! Time limit not defined. Defaulting to absurdly long time limit\n";
+		&write_log ("Warning! Time limit not defined. Defaulting to absurdly long time limit\n");
 		$TimeLimit = 999999999;
 	}
 }
@@ -466,12 +468,12 @@ sub load_targetfile {
 		$count++;
 	}
 	close (TARG);
-	print "Loaded $count addresses from $targetfile\n";
+	&write_log ("Loaded $count addresses from $targetfile\n");
 }
 
 sub get_aliases {
 	my $ip;
-	print "Scanning for aliases on $interface and add them to the target hash...";
+	&write_log ("Scanning for aliases on $interface and add them to the target hash...\n");
 
 	open (IFCONFIG, "/sbin/ip addr show $interface |");
 	my @lines = <IFCONFIG>;
@@ -480,10 +482,8 @@ sub get_aliases {
 	foreach $line (@lines) {
 		if ( $line =~ /inet (\d+\.\d+\.\d+\.\d+)/) {
 			$ip = $1;
-			print " got $ip on $interface ... ";
+			&write_log ("Got $ip on $interface ...\n");
 			$targethash{'$ip'} = "1";
 		}
 	}
-
-	print "done \n";
 }
