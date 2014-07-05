@@ -7,10 +7,6 @@
 # Added SSH-Watch for SSH-Bruteforce Attacks
 # An suppected IP will be blocked on all interfaces
 
-$OS=`uname`;
-chomp $OS;
-print "OS shows $OS\n";
-
 require 'getopts.pl';
 
 $guardianctrl = "/usr/local/bin/guardianctrl";
