@@ -363,9 +363,6 @@ sub load_conf {
 				$interface = `cat /var/ipfire/ethernet/settings | grep RED_DEV | cut -d"=" -f2`;
 			}
 		}
-		if (/BlockInterface\s+(.*)/) {
-			$block_interface = $1;
-		}
 		if (/AlertFile\s+(.*)/) {
 			$alert_file = $1;
 		}
@@ -386,10 +383,6 @@ sub load_conf {
 		}
 	}
 	
-	if ($block_interface eq "") {
-		&write_log ("Warning! BlockInterface is undefined.. using Interface: $interface\n");
-		$block_interface = $interface;
-	}
 	if ($alert_file eq "") {
 		&write_log ("Warning! AlertFile is undefined.. Assuming /var/log/snort.alert\n");
 		$alert_file="/var/log/snort.alert";
