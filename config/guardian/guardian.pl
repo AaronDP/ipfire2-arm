@@ -11,6 +11,9 @@ require 'getopts.pl';
 
 $guardianctrl = "/usr/local/bin/guardianctrl";
 
+# Array to store information about ignored networks.
+my @ignored_networks = ();
+
 &Getopts ('hc:d');
 if (defined($opt_h)) {
 	print "Guardian v1.7 \n";
@@ -194,6 +197,26 @@ sub checkaction {
 		return 1;
 	}
 
+	# Move through our ignored_networks array and check if the address is a part of one.
+	foreach my $network (@ignored_networks) {
+
+		# Get the network ranges.
+		my $first = @$network[0];
+		my $last = @$network[1];
+
+		# Convert source into 32bit decimal format.
+		my $src = &ip2dec($source);
+
+		# Check if $source addres is part of an ignored network.
+		if (($src >= $first) && ($src <= $last)) {
+
+			# Write out log messages.
+			&write_log("$source\t$type\n");
+			&write_log("Ignoring attack because $source is part of an ignored network\n");
+			return 1;
+		}
+	}
+
 	# Look if the offending packet was sent to us, the network, or the broadcast and block the
 	# attacker.
 	if ($targethash{$dest} == 1) {
@@ -248,6 +271,7 @@ sub build_ignore_hash {
 	#  $ignore{$broadcastaddr}=1;
 
 	my $count =0;
+	my @subnets;
 
 	$ignore{$gatewayaddr}=1;
 	$ignore{$hostipaddr}=1;
@@ -258,14 +282,57 @@ sub build_ignore_hash {
 			chomp;
 			next if (/\#/);  #skip comments
 			next if (/^\s*$/); # and blank lines
-			$ignore{$_}=1;
+
+			# Check if we got a single address or a subnet.
+			if (/\//) {
+
+				# Add enty to our subnet array.
+				push(@subnets, $_);
+
+			} else {
+
+				# Add single address to the ignore hash.
+				$ignore{$_}=1;
+			}
 
 			$count++;
 		}
 		close (IGNORE);
 
+		# Generate required values for ignored_networks array.
+		foreach my $subnet (@subnets) {
+
+			# Splitt subnet into net and mask parts.
+			# The first part (@split[0]) will contain the network information,
+			# the secont part (@split[1]) the subnetmask.
+			my @split = split(/\//, $subnet);
+
+			# Convert network into 32bit decimal format.
+			my $net = &ip2dec(@split[0]);
+
+			# Check if the subnetmask has been given as dot decimal notation or as a prefix
+			# and convert it into 32bit decimal format.
+			my $mask = @split[1];
+			if ( $mask =~ /(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/ ) {
+				$mask = &ip2dec($mask);
+			} else {
+				$mask = -1<<(32-$mask);
+			}
+
+			# Generate address space based on the given details.
+			my $first = $net & $mask;
+			my $last = $first | ~$mask;
+
+			# Append generated result to our ignored_networks array.
+			push(@ignored_networks, [$first, $last]);
+		}
+
 		# Write out log message.
 		&write_log("Loaded $count entries from $ignorefile\n");
+
+		# Return ignored_networks array.
+		return @ignored_networks;
+
 	} else {
 
 		# Handle empty or missing ignorefile.
@@ -450,4 +517,9 @@ sub get_aliases {
 			$targethash{'$ip'} = "1";
 		}
 	}
+}
+
+# this sub converts a dotted IP to a decimal IP
+sub ip2dec ($) {
+	unpack N => pack CCCC => split /\./ => shift;
 }
