@@ -69,11 +69,11 @@ if (defined($opt_d)) {
 open (ALERT, $alert_file) or die "can't open alert file: $alert_file: $!\n";
 seek (ALERT, 0, 2); # set the position to EOF.
 # this is the same as a tail -f :)
-open (ALERT2, "/var/log/messages" ) or die "can't open /var/log/messages: $!\n";
-seek (ALERT2, 0, 2); # set the position to EOF.
+open (SYSLOG, "/var/log/messages" ) or die "can't open /var/log/messages: $!\n";
+seek (SYSLOG, 0, 2); # set the position to EOF.
 # this is the same as a tail -f :)
-open (ALERT3, "/var/log/httpd/error_log" ) or die "can't open /var/log/httpd/error_log: $!\n";
-seek (ALERT3, 0, 2); # set the position to EOF.
+open (HTTPDLOG, "/var/log/httpd/error_log" ) or die "can't open /var/log/httpd/error_log: $!\n";
+seek (HTTPDLOG, 0, 2); # set the position to EOF.
 # this is the same as a tail -f :)
 $counter=0;
 
@@ -97,8 +97,8 @@ for (;;) {
 		}
 	}
 
-	if (seek(ALERT2,0,1)) {
-		while (<ALERT2>) {
+	if (seek(SYSLOG,0,1)) {
+		while (<SYSLOG>) {
 			chop;
 			if ($_=~/.*sshd.*Failed password for .* from (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).*/) {
 				&checkaction ($1, "", "possible SSH-Bruteforce Attack");}
@@ -109,8 +109,8 @@ for (;;) {
 			}
 	}
 
-	if (seek(ALERT3,0,1)){
-		while (<ALERT3>) {
+	if (seek(HTTPDLOG,0,1)){
+		while (<HTTPDLOG>) {
 			chop;
 			# This should catch Bruteforce Attacks on the WUI
 			if ($_ =~ /.*\[error\] \[client (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\] user(.*) not found:.*/) {
@@ -153,8 +153,8 @@ sub check_log_ssh {
 	my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,
 	$atime,$mtime,$ctime,$blksize,$blocks) = stat("/var/log/messages");
 	if ($size < $previous_size_ssh) {			# The filesize is smaller than last
-		close (ALERT2);					# we checked, so we need to reopen it
-		open (ALERT2, "/var/log/messages");		# This should still work in our main while
+		close (SYSLOG);					# we checked, so we need to reopen it
+		open (SYSLOG, "/var/log/messages");		# This should still work in our main while
 		$previous_size_ssh=$size;			# loop (I hope)
 		write_log ("Log filesize changed. Reopening /var/log/messages\n");
 	} else {
@@ -166,8 +166,8 @@ sub check_log_http {
 	my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,
 	$atime,$mtime,$ctime,$blksize,$blocks) = stat("/var/log/httpd/error_log");
 	if ($size < $previous_size_http) {			# The filesize is smaller than last
-		close (ALERT3);					# we checked, so we need to reopen it
-		open (ALERT3, "/var/log/httpd/error_log");	# This should still work in our main while
+		close (HTTPDLOG);					# we checked, so we need to reopen it
+		open (HTTPDLOG, "/var/log/httpd/error_log");	# This should still work in our main while
 		$previous_size_http=$size;			# loop (I hope)
 		write_log ("Log filesize changed. Reopening /var/log/httpd/error_log\n");
 	} else {
