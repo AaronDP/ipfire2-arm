@@ -50,7 +50,7 @@ $broadcastaddr =~ s/\d+$/255/;
 
 &get_aliases;
 
-%sshhash = ();
+my %blockhash = ();
 
 if ( -e $targetfile ) {
 	&load_targetfile;
@@ -86,10 +86,10 @@ for (;;) {
 				$type=$1;
 			}
 			if (/(\d+\.\d+\.\d+\.\d+):\d+ -\> (\d+\.\d+\.\d+\.\d+):\d+/) {
-				&checkem ($1, $2, $type);
+				&checkaction ($1, $2, $type);
 			}
 			if (/(\d+\.\d+\.\d+\.\d+)+ -\> (\d+\.\d+\.\d+\.\d+)+/) {
-				&checkem ($1, $2, $type);
+				&checkaction ($1, $2, $type);
 			}
 		}
 	}
@@ -98,11 +98,11 @@ for (;;) {
 		while (<ALERT2>) {
 			chop;
 			if ($_=~/.*sshd.*Failed password for .* from (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).*/) {
-				&checkssh ($1, "possible SSH-Bruteforce Attack");}
+				&checkaction ($1, "", "possible SSH-Bruteforce Attack");}
 
 			# This should catch Bruteforce Attacks with enabled preauth
 			if ($_ =~ /.*sshd.*Received disconnect from (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):.*\[preauth\]/) {
-				&checkssh ($1, "possible SSH-Bruteforce Attack, failed preauth");}
+				&checkaction ($1, "", "possible SSH-Bruteforce Attack, failed preauth");}
 			}
 	}
 
@@ -111,11 +111,13 @@ for (;;) {
 			chop;
 			# This should catch Bruteforce Attacks on the WUI
 			if ($_ =~ /.*\[error\] \[client (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\] user(.*) not found:.*/) {
-				&checkhttp ($1, "possible WUI-Bruteforce Attack, wrong user".$2);}
+				&checkaction ($1, "", "possible WUI-Bruteforce Attack, wrong user" .$2);
+			}
 
 			if ($_ =~ /.*\[error\] \[client (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\] user(.*): authentication failure for.*/) {
-				&checkhttp ($1, "possible WUI-Bruteforce Attack, wrong password for".$2);}
+				&checkaction ($1, "", "possible WUI-Bruteforce Attack, wrong password for user" .$2);
 			}
+		}
 	}
 
 # Run this stuff every 30 seconds..
@@ -170,100 +172,53 @@ sub check_log_http {
 	}
 }
 
-sub checkem {
-	my ($source, $dest,$type) = @_;
+
+sub checkaction {
+	my ($source, $dest, $type) = @_;
 	my $flag=0;
 
-	return 1 if ($source eq $hostipaddr);
-	# this should prevent is from nuking ourselves
+	# Do nothing if the source allready has been blocked.
+	return 0 if ($blockhash{$source} > 4);
 
-	return 1 if ($source eq $gatewayaddr); # or our gateway
+	# Check if the source address equals the hosts ip address.
+	# This will prevent us from nuking ourselves.
+	return 1 if ($source eq $hostipaddr);
+
+	# Check if the source equals our gateway.
+	return 1 if ($source eq $gatewayaddr);
+
+	# Watch if the source address is part of our ignore list.
 	if ($ignore{$source} == 1) { # check our ignore list..
 		&write_log("$source\t$type\n");
 		&write_log("Ignoring attack because $source is in my ignore list\n");
 		return 1;
 	}
 
-# if the offending packet was sent to us, the network, or the broadcast, then
+	# Look if the offending packet was sent to us, the network, or the broadcast and block the
+	# attacker.
 	if ($targethash{$dest} == 1) {
 		&ipchain ($source, $dest, $type);
 	}
-# you will see this if the destination was not in the $targethash, and the
-# packet was not ignored before the target check..
-	else {
-		&write_log ("Odd.. source = $source, dest = $dest - No action done.\n");
-		if (defined ($opt_d)) {
-			foreach $key (keys %targethash) {
-				&write_log ("targethash{$key} = $targethash{$key}\n");
-			}
-		}
-	}
-}
 
-sub checkssh {
-	my ($source,$type) = @_;
-	my $flag=0;
-
-	return 1 if ($source eq $hostipaddr);
-	# this should prevent is from nuking ourselves
-
-	return 1 if ($source eq $gatewayaddr); # or our gateway
-
-	return 0 if ($sshhash{$source} > 4); # allready blocked
-
-	if ( ($ignore{$source} == 1) ){
-		&write_log("Ignoring attack because $source is in my ignore list\n");
-		return 1;
-	}
-
-	if ($sshhash{$source} == 4 ) {
-		&write_log ("source = $source, blocking for ssh attack.\n");
+	if ( $blockhash{$source} == 4 ) {
+		&write_log ("Source = $source, blocking for $target attack.\n");
 		&ipchain ($source, "", $type);
-		$sshhash{$source} = $sshhash{$source}+1;
+		$blockhash{$source} = $blockhash{$source}+1;
 		return 0;
 	}
 
-	if ($sshhash{$source} eq "" ){
-		$sshhash{$source} = 1;
-		&write_log ("SSH Attack = $source, ssh count only $sshhash{$source} - No action done.\n");
+	# Start counting for new source addresses.
+	if ($blockhash{$source} eq "") {
+		$blockhash{$source} = 1;
+		&write_log("$source\t$type\n");
+		&write_log ("Start counting for source = $source\n");
 		return 0;
 	}
 
-	$sshhash{$source} = $sshhash{$source}+1;
-	&write_log ("SSH Attack = $source, ssh count only $sshhash{$source} - No action done.\n");
-}
-
-sub checkhttp {
-	my ($source,$type) = @_;
-	my $flag=0;
-
-	return 1 if ($source eq $hostipaddr);
-	# this should prevent is from nuking ourselves
-
-	return 1 if ($source eq $gatewayaddr); # or our gateway
-
-	return 0 if ($httphash{$source} > 4); # allready blocked
-
-	if ( ($ignore{$source} == 1) ){
-		&write_log("Ignoring attack because $source is in my ignore list\n");
-		return 1;
-	}
-
-	if ($httphash{$source} == 4 ) {
-		&write_log ("source = $source, blocking for http attack.\n");
-		&ipchain ($source, "", $type);
-		$httphash{$source} = $httphash{$source}+1;
-		return 0;
-	}
-
-	if ($httphash{$source} eq "" ){
-		$httphash{$source} = 1;
-		&write_log ("HTTP Attack = $source, http count only $httphash{$source} - No action done.\n");
-		return 0;
-	}
-
-	$httphash{$source} = $httphash{$source}+1;
-	&write_log ("HTTP Attack = $source, http count only $httphash{$source} - No action done.\n");
+	# Increase counting of existing addresses.
+	$blockhash{$source} = $blockhash{$source}+1;
+	&write_log("$source\t$type\n");
+	&write_log ("Source = $source count $blockhash{$source} - No action done yet.\n");
 }
 
 sub ipchain {
@@ -281,15 +236,19 @@ sub ipchain {
 }
 
 sub build_ignore_hash {
-#  This would cause is to ignore all broadcasts if it
-#  got set.. However if unset, then the attacker could spoof the packet to make
-#  it look like it came from the network, and a reply to the spoofed packet
-#  could be seen if the attacker were on the local network.
-#  $ignore{$networkaddr}=1;
+	#  This would cause is to ignore all broadcasts if it
+	#  got set.. However if unset, then the attacker could spoof the packet to make
+	#  it look like it came from the network, and a reply to the spoofed packet
+	#  could be seen if the attacker were on the local network.
 
-# same thing as above, just with the broadcast instead of the network.
-#  $ignore{$broadcastaddr}=1;
+	#  $ignore{$networkaddr}=1;
+
+	# same thing as above, just with the broadcast instead of the network.
+
+	#  $ignore{$broadcastaddr}=1;
+
 	my $count =0;
+
 	$ignore{$gatewayaddr}=1;
 	$ignore{$hostipaddr}=1;
 	if ($ignorefile ne "") {
@@ -300,11 +259,16 @@ sub build_ignore_hash {
 			next if (/\#/);  #skip comments
 			next if (/^\s*$/); # and blank lines
 			$ignore{$_}=1;
+
 			$count++;
 		}
 		close (IGNORE);
-		&write_log("Loaded $count addresses from $ignorefile\n");
+
+		# Write out log message.
+		&write_log("Loaded $count entries from $ignorefile\n");
 	} else {
+
+		# Handle empty or missing ignorefile.
 		&write_log("No ignore file was loaded!\n");
 	}
 }
