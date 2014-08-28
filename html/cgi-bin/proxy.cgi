@@ -267,6 +267,7 @@ $proxysettings{'LDAP_BINDDN_USER'} = '';
 $proxysettings{'LDAP_BINDDN_PASS'} = '';
 $proxysettings{'LDAP_GROUP'} = '';
 $proxysettings{'NTLM_AUTH_GROUP'} = '';
+$proxysettings{'NTLM_AUTH_BASIC'} = 'off';
 $proxysettings{'NTLM_DOMAIN'} = '';
 $proxysettings{'NTLM_PDC'} = '';
 $proxysettings{'NTLM_BDC'} = '';
@@ -894,6 +895,10 @@ $checked{'NTLM_ENABLE_ACL'}{$proxysettings{'NTLM_ENABLE_ACL'}} = "checked='check
 $checked{'NTLM_USER_ACL'}{'positive'} = '';
 $checked{'NTLM_USER_ACL'}{'negative'} = '';
 $checked{'NTLM_USER_ACL'}{$proxysettings{'NTLM_USER_ACL'}} = "checked='checked'";
+
+$checked{'NTLM_AUTH_BASIC'}{'on'} = '';
+$checked{'NTLM_AUTH_BASIC'}{'off'} = '';
+$checked{'NTLM_AUTH_BASIC'}{$proxysettings{'NTLM_AUTH_BASIC'}} = "checked='checked'";
 
 $checked{'RADIUS_ENABLE_ACL'}{'off'} = '';
 $checked{'RADIUS_ENABLE_ACL'}{'on'} = '';
@@ -2002,6 +2007,14 @@ END
 if ($proxysettings{'AUTH_METHOD'} eq 'ntlm-auth') {
 	print <<END;
 		<hr size ='1'>
+		<table width='100%'>
+			<td width='20%' class='base'>$Lang::tr{'advproxy basic authentication'}:</td>
+			<td width='40%'><input type='checkbox' name='NTLM_AUTH_BASIC' $checked{'NTLM_AUTH_BASIC'}{'on'} /></td>
+			<td colspan='2'>&nbsp;</td>
+		</table>
+
+		<hr size='1' />
+
 		<table width='100%'>
 			<tr>
 				<td colspan='4'><b>$Lang::tr{'advproxy group access control'}</b></td>
@@ -3208,6 +3221,48 @@ END
 		print FILE "\n";
 	}
 
+	open (PORTS,"$acl_ports_ssl");
+	my @ssl_ports = <PORTS>;
+	close PORTS;
+
+	if (@ssl_ports) {
+		foreach (@ssl_ports) {
+			print FILE "acl SSL_ports port $_";
+		}
+	}
+
+	open (PORTS,"$acl_ports_safe");
+	my @safe_ports = <PORTS>;
+	close PORTS;
+
+	if (@safe_ports) {
+		foreach (@safe_ports) {
+			print FILE "acl Safe_ports port $_";
+		}
+	}
+
+	print FILE <<END
+
+acl IPFire_http  port $http_port
+acl IPFire_https port $https_port
+acl IPFire_ips              dst $netsettings{'GREEN_ADDRESS'}
+acl IPFire_networks         src "$acl_src_subnets"
+acl IPFire_servers          dst "$acl_src_subnets"
+acl IPFire_green_network    src $green_cidr
+acl IPFire_green_servers    dst $green_cidr
+END
+	;
+	if ($netsettings{'BLUE_DEV'}) { print FILE "acl IPFire_blue_network     src $blue_cidr\n"; }
+	if ($netsettings{'BLUE_DEV'}) { print FILE "acl IPFire_blue_servers     dst $blue_cidr\n"; }
+	if (!-z $acl_src_banned_ip) { print FILE "acl IPFire_banned_ips       src \"$acl_src_banned_ip\"\n"; }
+	if (!-z $acl_src_banned_mac) { print FILE "acl IPFire_banned_mac       arp \"$acl_src_banned_mac\"\n"; }
+	if (!-z $acl_src_unrestricted_ip) { print FILE "acl IPFire_unrestricted_ips src \"$acl_src_unrestricted_ip\"\n"; }
+	if (!-z $acl_src_unrestricted_mac) { print FILE "acl IPFire_unrestricted_mac arp \"$acl_src_unrestricted_mac\"\n"; }
+	print FILE <<END
+acl CONNECT method CONNECT
+END
+	;
+
 	if ($proxysettings{'CACHE_SIZE'} > 0) {
 		print FILE <<END
 maximum_object_size $proxysettings{'MAX_SIZE'} KB
@@ -3376,7 +3431,22 @@ END
 			}
 			print FILE "\n";
 
-			print FILE "auth_param ntlm children $proxysettings{'AUTH_CHILDREN'}\n";
+			print FILE "auth_param ntlm children $proxysettings{'AUTH_CHILDREN'}\n\n";
+
+			# BASIC authentication
+			if ($proxysettings{'NTLM_AUTH_BASIC'} eq "on") {
+				print FILE "auth_param basic program /usr/bin/ntlm_auth --helper-protocol=squid-2.5-basic";
+				if ($proxysettings{'NTLM_AUTH_GROUP'}) {
+					my $ntlm_auth_group = $proxysettings{'NTLM_AUTH_GROUP'};
+					$ntlm_auth_group =~ s/\\/\+/;
+
+					print FILE " --require-membership-of=\"$ntlm_auth_group\"";
+				}
+				print FILE "\n";
+				print FILE "auth_param basic children 10\n";
+				print FILE "auth_param basic realm IPFire Web Proxy Server\n";
+				print FILE "auth_param basic credentialsttl 2 hours\n\n";
+			}
 		}
 
 		if ($proxysettings{'AUTH_METHOD'} eq 'radius')
@@ -3473,48 +3543,6 @@ END
 	if ((!-z $mimetypes) && ($proxysettings{'ENABLE_MIME_FILTER'} eq 'on')) {
 		print FILE "acl blocked_mimetypes rep_mime_type \"$mimetypes\"\n\n";
 	}
-
-open (PORTS,"$acl_ports_ssl");
-my @ssl_ports = <PORTS>;
-close PORTS;
-
-if (@ssl_ports) {
-	foreach (@ssl_ports) {
-		print FILE "acl SSL_ports port $_";
-	}
-}
-
-open (PORTS,"$acl_ports_safe");
-my @safe_ports = <PORTS>;
-close PORTS;
-
-if (@safe_ports) {
-	foreach (@safe_ports) {
-		print FILE "acl Safe_ports port $_";
-	}
-}
-
-	print FILE <<END
-
-acl IPFire_http  port $http_port
-acl IPFire_https port $https_port
-acl IPFire_ips              dst $netsettings{'GREEN_ADDRESS'}
-acl IPFire_networks         src "$acl_src_subnets"
-acl IPFire_servers          dst "$acl_src_subnets"
-acl IPFire_green_network    src $green_cidr
-acl IPFire_green_servers    dst $green_cidr
-END
-	;
-	if ($netsettings{'BLUE_DEV'}) { print FILE "acl IPFire_blue_network     src $blue_cidr\n"; }
-	if ($netsettings{'BLUE_DEV'}) { print FILE "acl IPFire_blue_servers     dst $blue_cidr\n"; }
-	if (!-z $acl_src_banned_ip) { print FILE "acl IPFire_banned_ips       src \"$acl_src_banned_ip\"\n"; }
-	if (!-z $acl_src_banned_mac) { print FILE "acl IPFire_banned_mac       arp \"$acl_src_banned_mac\"\n"; }
-	if (!-z $acl_src_unrestricted_ip) { print FILE "acl IPFire_unrestricted_ips src \"$acl_src_unrestricted_ip\"\n"; }
-	if (!-z $acl_src_unrestricted_mac) { print FILE "acl IPFire_unrestricted_mac arp \"$acl_src_unrestricted_mac\"\n"; }
-	print FILE <<END
-acl CONNECT method CONNECT
-END
-	;
 
 	if ($proxysettings{'CLASSROOM_EXT'} eq 'on') {
 		print FILE <<END
