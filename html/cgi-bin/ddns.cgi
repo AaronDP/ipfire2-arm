@@ -667,7 +667,7 @@ sub GenerateDDNSConfigFile {
 		my $use_token = 0;
 
 		# Handle token based auth for various providers.
-		if ($provider ~~ ["dns.lightningwirelabs.com", "entrydns.net", "regfish.com", "spdns.de"] && $username eq "token") {
+		if ($provider ~~ ["dns.lightningwirelabs.com", "entrydns.net", "nsupdate.info", "regfish.com", "spdns.de"] && $username eq "token") {
 			$use_token = 1;
 
 		# Handle token auth for freedns.afraid.org and regfish.com.
@@ -678,13 +678,6 @@ sub GenerateDDNSConfigFile {
 		# Handle keys for nsupdate
 		} elsif (($provider eq "nsupdate") && $username && $password) {
 			print FILE "key = $username\n";
-			print FILE "secret = $password\n";
-
-			$username = "";
-			$password = "";
-
-		# Handle keys for nsupdate.info
-		} elsif (($provider eq "nsupdate.info") && $password) {
 			print FILE "secret = $password\n";
 
 			$username = "";
