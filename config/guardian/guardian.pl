@@ -7,14 +7,15 @@
 # Added SSH-Watch for SSH-Bruteforce Attacks
 # An suppected IP will be blocked on all interfaces
 
-require 'getopts.pl';
+use Getopt::Std;
 
 $guardianctrl = "/usr/local/bin/guardianctrl";
 
 # Array to store information about ignored networks.
 my @ignored_networks = ();
 
-&Getopts ('hc:d');
+# Option parser for given arguments from command line.
+getopts ('hc:d');
 if (defined($opt_h)) {
 	print "Guardian v1.7 \n";
 	print "guardian.pl [-hd] <-c config>\n";
@@ -23,7 +24,11 @@ if (defined($opt_h)) {
 	print " -c  specifiy a configuration file other than the default (/etc/guardian/guardian.conf)\n";
 	exit;
 }
+
+# Call function to read in the configuration file.
 &load_conf;
+
+# Setup signal handler.
 &sig_handler_setup;
 
 &write_log ("My ip address and interface are: $hostipaddr $interface\n");
