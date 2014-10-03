@@ -14,8 +14,11 @@ $guardianctrl = "/usr/local/bin/guardianctrl";
 # Array to store information about ignored networks.
 my @ignored_networks = ();
 
+# Hash to store IP addresses and their current state.
+my %blockhash = ();
+
 # Option parser for given arguments from command line.
-getopts ('hc:d');
+&getopts ('hc:d');
 if (defined($opt_h)) {
 	print "Guardian v1.7 \n";
 	print "guardian.pl [-hd] <-c config>\n";
@@ -31,7 +34,7 @@ if (defined($opt_h)) {
 # Setup signal handler.
 &sig_handler_setup;
 
-&write_log ("My ip address and interface are: $hostipaddr $interface\n");
+&debugger("My ip address and interface are: $hostipaddr $interface\n");
 
 if ($hostipaddr !~ /\d+\.\d+\.\d+\.\d+/) {
 	print "This ip address is bad : $hostipaddr\n";
@@ -43,9 +46,12 @@ $networkaddr =~ s/\d+$/0/;
 $gatewayaddr = `cat /var/ipfire/red/remote-ipaddress 2>/dev/null`;
 $broadcastaddr = $hostipaddr;
 $broadcastaddr =~ s/\d+$/255/;
+
+# Generate hash for ignored hosts or networks.
 &build_ignore_hash;
 
-&write_log ("My gatewayaddess is: $gatewayaddr\n");
+
+&debugger("My gatewayaddess is: $gatewayaddr\n");
 
 # This is the target hash. If a packet was destened to any of these, then the
 # sender of that packet will get denied, unless it is on the ignore list..
@@ -58,15 +64,13 @@ $broadcastaddr =~ s/\d+$/255/;
 
 &get_aliases;
 
-my %blockhash = ();
-
 if ( -e $targetfile ) {
 	&load_targetfile;
 }
 
 # Check if we are running in debug mode or we can deamonize.
 if (defined($opt_d)) {
-	&write_log ("Running in debug mode...\n");
+	&debugger("Running in debug mode...\n");
 } else {
 	&daemonize;
 }
@@ -148,7 +152,7 @@ sub check_log_name {
 		close (ALERT);               # we checked, so we need to reopen it
 		open (ALERT, "$alert_file"); # This should still work in our main while
 		$previous_size=$size;        # loop (I hope)
-		write_log ("Log filename changed. Reopening $alert_file\n");
+		&debugger("Log filename changed. Reopening $alert_file\n");
 	} else {
 		$previous_size=$size;
 	}
@@ -161,7 +165,7 @@ sub check_log_ssh {
 		close (SYSLOG);					# we checked, so we need to reopen it
 		open (SYSLOG, "/var/log/messages");		# This should still work in our main while
 		$previous_size_ssh=$size;			# loop (I hope)
-		write_log ("Log filesize changed. Reopening /var/log/messages\n");
+		&debugger("Log filesize changed. Reopening /var/log/messages\n");
 	} else {
 		$previous_size_ssh=$size;
 	}
@@ -174,7 +178,7 @@ sub check_log_http {
 		close (HTTPDLOG);					# we checked, so we need to reopen it
 		open (HTTPDLOG, "/var/log/httpd/error_log");	# This should still work in our main while
 		$previous_size_http=$size;			# loop (I hope)
-		write_log ("Log filesize changed. Reopening /var/log/httpd/error_log\n");
+		&debugger("Log filesize changed. Reopening /var/log/httpd/error_log\n");
 	} else {
 		$previous_size_http=$size;
 	}
@@ -197,8 +201,8 @@ sub checkaction {
 
 	# Watch if the source address is part of our ignore list.
 	if ($ignore{$source} == 1) { # check our ignore list..
-		&write_log("$source\t$type\n");
-		&write_log("Ignoring attack because $source is in my ignore list\n");
+		&logger("$source\t$type\n");
+		&logger("Ignoring attack because $source is in my ignore list\n");
 		return 1;
 	}
 
@@ -216,8 +220,8 @@ sub checkaction {
 		if (($src >= $first) && ($src <= $last)) {
 
 			# Write out log messages.
-			&write_log("$source\t$type\n");
-			&write_log("Ignoring attack because $source is part of an ignored network\n");
+			&logger("$source\t$type\n");
+			&logger("Ignoring attack because $source is part of an ignored network\n");
 			return 1;
 		}
 	}
@@ -229,7 +233,7 @@ sub checkaction {
 	}
 
 	if ( $blockhash{$source} == 4 ) {
-		&write_log ("Source = $source, blocking for $target attack.\n");
+		&logger("Source = $source, blocking for $target attack.\n");
 		&ipchain ($source, "", $type);
 		$blockhash{$source} = $blockhash{$source}+1;
 		return 0;
@@ -238,22 +242,22 @@ sub checkaction {
 	# Start counting for new source addresses.
 	if ($blockhash{$source} eq "") {
 		$blockhash{$source} = 1;
-		&write_log("$source\t$type\n");
-		&write_log ("Start counting for source = $source\n");
+		&debugger("$source\t$type\n");
+		&debugger("Start counting for source = $source\n");
 		return 0;
 	}
 
 	# Increase counting of existing addresses.
 	$blockhash{$source} = $blockhash{$source}+1;
-	&write_log("$source\t$type\n");
-	&write_log ("Source = $source count $blockhash{$source} - No action done yet.\n");
+	&debugger("$source\t$type\n");
+	&debugger("Source = $source count $blockhash{$source} - No action done yet.\n");
 }
 
 sub ipchain {
 	my ($source, $dest, $type) = @_;
-	&write_log ("$source\t$type\n");
+	&debugger("$source\t$type\n");
 	if ($hash{$source} eq "") {
-		&write_log ("Running '$guardianctrl block $source'\n");
+		&debugger("Running '$guardianctrl block $source'\n");
 		system ("$guardianctrl block $source");
 		$hash{$source} = time() + $TimeLimit;
 	} else {
@@ -333,7 +337,7 @@ sub build_ignore_hash {
 		}
 
 		# Write out log message.
-		&write_log("Loaded $count entries from $ignorefile\n");
+		&debugger("Loaded $count entries from $ignorefile\n");
 
 		# Return ignored_networks array.
 		return @ignored_networks;
@@ -341,7 +345,7 @@ sub build_ignore_hash {
 	} else {
 
 		# Handle empty or missing ignorefile.
-		&write_log("No ignore file was loaded!\n");
+		&debugger("No ignore file was loaded!\n");
 	}
 }
 
@@ -389,19 +393,19 @@ sub load_conf {
 	}
 	
 	if ($alert_file eq "") {
-		&write_log ("Warning! AlertFile is undefined.. Assuming /var/log/snort.alert\n");
+		&debugger("Warning! AlertFile is undefined.. Assuming /var/log/snort.alert\n");
 		$alert_file="/var/log/snort.alert";
 	}
 	if ($hostipaddr eq "") {
-		&write_log ("Warning! HostIpAddr is undefined! Attempting to guess..\n");
+		&debugger("Warning! HostIpAddr is undefined! Attempting to guess..\n");
 		$hostipaddr = `cat /var/ipfire/red/local-ipaddress`;
-		&write_log ("Got it.. your HostIpAddr is $hostipaddr\n");
+		&debugger("Got it.. your HostIpAddr is $hostipaddr\n");
 	}
 	if ($ignorefile eq "") {
-		&write_log ("Warning! IgnoreFile is undefined.. going with default ignore list (hostname and gateway)!\n");
+		&debugger("Warning! IgnoreFile is undefined.. going with default ignore list (hostname and gateway)!\n");
 	}
 	if ($hostgatewaybyte eq "") {
-		&write_log ("Warning! HostGatewayByte is undefined.. gateway will not be in ignore list!\n");
+		&debugger("Warning! HostGatewayByte is undefined.. gateway will not be in ignore list!\n");
 	}
 	if ($logfile eq "") {
 		print "Warning! LogFile is undefined.. Assuming debug mode, output to STDOUT\n";
@@ -418,20 +422,41 @@ sub load_conf {
 	}
 
 	if ($TimeLimit eq "") {
-		&write_log ("Warning! Time limit not defined. Defaulting to absurdly long time limit\n");
+		&debugger("Warning! Time limit not defined. Defaulting to absurdly long time limit\n");
 		$TimeLimit = 999999999;
 	}
 }
 
-sub write_log {
+#
+## Function to write messages to guardians logfile.
+#
+sub logger {
 	my $message = $_[0];
 	my $date = localtime();
-	if (defined($opt_d)) {  # we are in debug mode, and not daemonized
+
+	# Open Logfile.
+	open (LOG, ">>$logfile");
+
+	# Append message.
+	print LOG $date.": ".$message;
+
+	# Close the file afterwards.
+	close (LOG);
+
+	# Also print send to STDOUT if we are running in debug mode.
+	&debugger("$message");
+}
+
+#
+## Function to write debug content to STDOUT.
+#
+sub debugger {
+	my $message = $_[0];
+
+	# Only write to STDOUT if debug mode has been enabled.
+	if (defined($opt_d)) {
+		# Print out to STDOUT.
 		print STDOUT $message;
-	} else {
-		open (LOG, ">>$logfile");
-		print LOG $date.": ".$message;
-		close (LOG);
 	}
 }
 
@@ -442,7 +467,7 @@ sub daemonize {
 		exit(0);
 	} else {
 # child
-		&write_log ("Guardian process id $$\n");
+		&debugger("Guardian process id $$\n");
 		$home = (getpwuid($>))[7] || die "No home directory!\n";
 		chdir($home);                   # go to my homedir
 		setpgrp(0,0);                   # become process leader
@@ -473,13 +498,13 @@ sub remove_blocks {
 
 sub call_unblock {
 	my ($source, $message) = @_;
-	&write_log ("$message");
+	&debugger("$message");
 	system ("$guardianctrl unblock $source");
 }
 
 sub clean_up_and_exit {
 	my $source;
-	&write_log ("received kill sig.. shutting down\n");
+	&debugger("received kill sig.. shutting down\n");
 	foreach $source (keys %hash) {
 		&call_unblock ($source, "removing $source for shutdown\n");
 	}
@@ -497,12 +522,12 @@ sub load_targetfile {
 		$count++;
 	}
 	close (TARG);
-	&write_log ("Loaded $count addresses from $targetfile\n");
+	&logger("Loaded $count addresses from $targetfile\n");
 }
 
 sub get_aliases {
 	my $ip;
-	&write_log ("Scanning for aliases on $interface and add them to the target hash...\n");
+	&debugger("Scanning for aliases on $interface and add them to the target hash...\n");
 
 	open (IFCONFIG, "/sbin/ip addr show $interface |");
 	my @lines = <IFCONFIG>;
@@ -511,7 +536,7 @@ sub get_aliases {
 	foreach $line (@lines) {
 		if ( $line =~ /inet (\d+\.\d+\.\d+\.\d+)/) {
 			$ip = $1;
-			&write_log ("Got $ip on $interface ...\n");
+			&debugger("Got $ip on $interface ...\n");
 			$targethash{'$ip'} = "1";
 		}
 	}
