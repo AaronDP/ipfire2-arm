@@ -804,6 +804,8 @@ buildipfire() {
   ipfiremake iotop
   ipfiremake stunnel
   ipfiremake sslscan
+  ipfiremake perl-common-sense
+  ipfiremake perl-inotify2
 }
 
 buildinstaller() {
