@@ -177,6 +177,9 @@ while () {
 		# Drop processed event from queue.
 		$queue->dequeue();
 	}
+	# Call subroutine to check if the block time of
+	# any address has expired.
+	&remove_blocks;
 }
 
 #
@@ -191,12 +194,12 @@ sub handle_ssh ($) {
 
 	# Check for failed password attempts.
 	if ($message =~/.*sshd.*Failed password for .* from (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).*/) {
-		&checkaction ($1, "", "possible SSH-Bruteforce Attack");
+		&checkaction ($1, "Possible SSH-Bruteforce Attack.");
 	}
 
 	# This should catch Bruteforce Attacks with enabled preauth
 	elsif ($message =~ /.*sshd.*Received disconnect from (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):.*\[preauth\]/) {
-		&checkaction ($1, "", "possible SSH-Bruteforce Attack, failed preauth");
+		&checkaction ($1, "Possible SSH-Bruteforce Attack - failed preauth.");
 	}
 }
 
@@ -208,18 +211,14 @@ sub handle_snort (@) {
 
 	# Loop through the given array and parse the lines.
 	foreach my $line (@alert) {
-		if ($line =~ /\[\*\*\]\s+(.*)\s+\[\*\*\]/) {
-			$type=$1;
-		}
-
 		# Look for a line like xxx.xxx.xxx.xxx:xxx -> xxx.xxx.xxx.xxx:xxx
-		elsif ($line =~ /(\d+\.\d+\.\d+\.\d+):\d+ -\> (\d+\.\d+\.\d+\.\d+):\d+/) {
-			&checkaction ($1, $2, $type);
+		if ($line =~ /(\d+\.\d+\.\d+\.\d+):\d+ -\> (\d+\.\d+\.\d+\.\d+):\d+/) {
+			&checkaction ($1, "An active snort rule has matched and gained an alert.");
 		}
 
 		# Search for a line like xxx.xxx.xxx.xxx -> xxx.xxx.xxx.xxx
 		elsif ($line =~ /(\d+\.\d+\.\d+\.\d+)+ -\> (\d+\.\d+\.\d+\.\d+)+/) {
-			&checkaction ($1, $2, $type);
+			&checkaction ($1, "An active snort rule has matched and gained an alert.");
 		}
 	}
 }
@@ -232,12 +231,12 @@ sub handle_httpd ($) {
 
 	# This should catch Bruteforce Attacks on the WUI
 	if ($message =~ /.*\[error\] \[client (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\] user(.*) not found:.*/) {
-		&checkaction ($1, "", "possible WUI-Bruteforce Attack, wrong user" .$2);
+		&checkaction ($1, "Possible WUI-Bruteforce Attack, wrong user" .$2);
 	}
 
 	# Detect Password brute-forcing.
 	elsif ($message =~ /.*\[error\] \[client (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\] user(.*): authentication failure for.*/) {
-		&checkaction ($1, "", "possible WUI-Bruteforce Attack, wrong password for user" .$2);
+		&checkaction ($1, "Possible WUI-Bruteforce Attack, wrong password for user" .$2);
 	}
 }
 
@@ -278,9 +277,11 @@ sub init_fileposition {
 	return %fileposition;
 }
 
+#
+## Function to check wich action should performed for a given event.
+#
 sub checkaction {
-	my ($source, $dest, $type) = @_;
-	my $flag=0;
+	my ($source, $message) = @_;
 
 	# Do nothing if the source allready has been blocked.
 	return 0 if ($addresshash{$source} > 4);
@@ -293,9 +294,8 @@ sub checkaction {
 	return 1 if ($source eq $gatewayaddr);
 
 	# Watch if the source address is part of our ignore list.
-	if ($ignore{$source} == 1) { # check our ignore list..
-		&logger("$source\t$type\n");
-		&logger("Ignoring attack because $source is in my ignore list\n");
+	if ($ignore{$source} == 1) {
+		&logger("Ignoring attack because $source is in my ignore list!\n");
 		return 1;
 	}
 
@@ -311,46 +311,35 @@ sub checkaction {
 
 		# Check if $source addres is part of an ignored network.
 		if (($src >= $first) && ($src <= $last)) {
-
 			# Write out log messages.
-			&logger("$source\t$type\n");
 			&logger("Ignoring attack because $source is part of an ignored network\n");
 			return 1;
 		}
 	}
 
+	# Check if the "source" reached our blocking count (4).
 	if ( $addresshash{$source} == 4 ) {
-		&logger("Source = $source, blocking for $target attack.\n");
-		&ipchain ($source, "", $type);
+		# Write out log message.
+		&logger("Blocking $source: $message\n");
+
+		# Block the source address.
+		&call_block($source);
+
+		# Update the addresshash.
 		$addresshash{$source} = $addresshash{$source}+1;
 		return 0;
 	}
-
 	# Start counting for new source addresses.
-	if ($addresshash{$source} eq "") {
+	elsif ($addresshash{$source} eq "") {
+		# Set addresshash to "1".
 		$addresshash{$source} = 1;
-		&debugger("$source\t$type\n");
-		&debugger("Start counting for source = $source\n");
+
+		&debugger("Start counting for $source\n");
 		return 0;
-	}
-
-	# Increase counting of existing addresses.
-	$addresshash{$source} = $addresshash{$source}+1;
-	&debugger("$source\t$type\n");
-	&debugger("Source = $source count $addresshash{$source} - No action done yet.\n");
-}
-
-sub ipchain {
-	my ($source, $dest, $type) = @_;
-	&debugger("$source\t$type\n");
-	if ($hash{$source} eq "") {
-		&debugger("Running '$guardianctrl block $source'\n");
-		system ("$guardianctrl block $source");
-		$hash{$source} = time() + $TimeLimit;
 	} else {
-# We have already blocked this one, but snort detected another attack. So
-# we should update the time blocked..
-		$hash{$source} = time() + $TimeLimit;
+		# Increase counting of existing addresses.
+		$addresshash{$source} = $addresshash{$source}+1;
+		&debugger("Source $source count $addresshash{$source} - No action done yet.\n");
 	}
 }
 
@@ -585,28 +574,68 @@ sub sig_handler_setup {
 #  $SIG{HUP} = \&flush_and_reload; # kill -1
 }
 
+#
+## Function to determine if the bocktime of an address has been expired.
+#
 sub remove_blocks {
-	my $source;
+	my $address;
+
+	# Get current time.
 	my $time = time();
-	foreach $source (keys %hash) {
-		if ($hash{$source} < $time) {
-			&call_unblock ($source, "expiring block of $source\n");
-			delete ($hash{$source});
+
+	# Loop through the current blocked addresses.
+	foreach $address (keys %blockhash) {
+		# Check if the time for the address has expired.
+		if ($blockhash{$address} < $time) {
+			# Call unblock.
+			&debugger("Block time for $address has expired\n");
+			&call_unblock($address);
+
+			# Drop address from blockhash.
+			delete ($blockhash{$address});
 		}
 	}
 }
 
-sub call_unblock {
-	my ($source, $message) = @_;
-	&debugger("$message");
-	system ("$guardianctrl unblock $source");
+#
+## Function to block a given address and set counter for unblocking.
+#
+sub call_block ($) {
+	my $address = $_[0];
+
+	# Generate time when the block will expire.
+	my $expire = time() + $TimeLimit;
+
+	# Check if the address currently is not blocked.
+	if ($blockhash{"$address"} eq "") {
+		# Call guardianctrl to block the address.
+		system("$guardianctrl block $address");
+	}
+
+	# Store/update the generated expire time.
+	$blockhash{$address} = $expire;
 }
 
+#
+## Function to unblock a given address.
+#
+sub call_unblock ($) {
+	my $address = $_[0];
+
+	# Call guardianctrl to unblock the address.
+	system ("$guardianctrl unblock $address");
+}
+
+#
+## Subroutine to handle shutdown of the programm.
 sub clean_up_and_exit {
-	my $source;
 	&debugger("received kill sig.. shutting down\n");
-	foreach $source (keys %hash) {
-		&call_unblock ($source, "removing $source for shutdown\n");
+
+	# Unblock all currently blocked addresses.
+	foreach my $address (keys %blockhash) {
+		# Unblock the address.
+		&debugger("Removing $address for shutdown\n");
+		&call_unblock ($address);
 	}
 	exit;
 }
