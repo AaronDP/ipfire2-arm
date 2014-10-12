@@ -34,6 +34,9 @@ my @ignored_networks = ();
 my @monitored_files = ();
 
 # Hash to store IP addresses and their current state.
+my %addresshash = ();
+
+# Hash to store blocked addresses and the remaining time.
 my %blockhash = ();
 
 # Hast to store the last read position of a file.
@@ -280,7 +283,7 @@ sub checkaction {
 	my $flag=0;
 
 	# Do nothing if the source allready has been blocked.
-	return 0 if ($blockhash{$source} > 4);
+	return 0 if ($addresshash{$source} > 4);
 
 	# Check if the source address equals the hosts ip address.
 	# This will prevent us from nuking ourselves.
@@ -316,25 +319,25 @@ sub checkaction {
 		}
 	}
 
-	if ( $blockhash{$source} == 4 ) {
+	if ( $addresshash{$source} == 4 ) {
 		&logger("Source = $source, blocking for $target attack.\n");
 		&ipchain ($source, "", $type);
-		$blockhash{$source} = $blockhash{$source}+1;
+		$addresshash{$source} = $addresshash{$source}+1;
 		return 0;
 	}
 
 	# Start counting for new source addresses.
-	if ($blockhash{$source} eq "") {
-		$blockhash{$source} = 1;
+	if ($addresshash{$source} eq "") {
+		$addresshash{$source} = 1;
 		&debugger("$source\t$type\n");
 		&debugger("Start counting for source = $source\n");
 		return 0;
 	}
 
 	# Increase counting of existing addresses.
-	$blockhash{$source} = $blockhash{$source}+1;
+	$addresshash{$source} = $addresshash{$source}+1;
 	&debugger("$source\t$type\n");
-	&debugger("Source = $source count $blockhash{$source} - No action done yet.\n");
+	&debugger("Source = $source count $addresshash{$source} - No action done yet.\n");
 }
 
 sub ipchain {
