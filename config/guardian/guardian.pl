@@ -351,41 +351,43 @@ sub ipchain {
 	}
 }
 
+#
+## Function to generate the ignore hash.
+#
 sub build_ignore_hash {
-	#  This would cause is to ignore all broadcasts if it
-	#  got set.. However if unset, then the attacker could spoof the packet to make
-	#  it look like it came from the network, and a reply to the spoofed packet
-	#  could be seen if the attacker were on the local network.
-
-	#  $ignore{$networkaddr}=1;
-
-	# same thing as above, just with the broadcast instead of the network.
-
-	#  $ignore{$broadcastaddr}=1;
-
 	my $count =0;
 	my @subnets;
 
+	# Add our gatewayaddress and hostipaddr to the ignore hash.
 	$ignore{$gatewayaddr}=1;
 	$ignore{$hostipaddr}=1;
+
+	# Read-in the file if an ignorefile has been provided.
 	if ($ignorefile ne "") {
-		open (IGNORE, $ignorefile);
+		open (IGNORE, $ignorefile) or die "Could not open $ignorefile. $!\n";
 		while (<IGNORE>) {
 			$_=~ s/\s+$//;
 			chomp;
-			next if (/\#/);  #skip comments
-			next if (/^\s*$/); # and blank lines
 
-			# Check if we got a single address or a subnet.
-			if (/\//) {
+			# Skip comments.
+			next if (/\#/);
 
+			# Skip blank lines.
+			next if (/^\s*$/);
+
+			# Check if we got a valid single address.
+			if (&Network::check_ip_address($_)) {
+				# Add single address to the ignore hash.
+				$ignore{$_}=1;
+			}
+			# Check if the input contains a valid address and mask.
+			elsif (&Network::check_network($_)) {
 				# Add enty to our subnet array.
 				push(@subnets, $_);
 
 			} else {
-
-				# Add single address to the ignore hash.
-				$ignore{$_}=1;
+				# Ignore the invalid input.
+				next;
 			}
 
 			$count++;
