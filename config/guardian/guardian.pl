@@ -76,30 +76,11 @@ if (! $hostipaddr) {
 my $gatewayaddr = &get_address("$gatewayaddress_file");
 &debugger("My gatewayaddess is: $gatewayaddr\n");
 
-# Calculate networkaddress and broadcast addresses.
-my $networkaddr = $hostipaddr;
-my $networkaddr =~ s/\d+$/0/;
-my $broadcastaddr = $hostipaddr;
-my $broadcastaddr =~ s/\d+$/255/;
-
 # Generate hash for ignored hosts or networks.
 &build_ignore_hash;
 
-# This is the target hash. If a packet was sent to any of these addresses, then the
-# sender of that packet will get denied, unless it is on the ignore list..
-my %targethash = (
-		"$networkaddr" => 1,
-		"$broadcastaddr" => 1,
-		"0" => 1,	# This is what gets sent to &checkem if no destination was found.
-		"$hostipaddr" => 1 );
-
 # Get alias addresses on red.
 &get_aliases;
-
-# Load targetfile if given by the configfile.
-if ( -e $targetfile ) {
-	&load_targetfile;
-}
 
 # Gather file positions.
 &init_fileposition;
@@ -335,12 +316,6 @@ sub checkaction {
 		}
 	}
 
-	# Look if the offending packet was sent to us, the network, or the broadcast and block the
-	# attacker.
-	if ($targethash{$dest} == 1) {
-		&ipchain ($source, $dest, $type);
-	}
-
 	if ( $blockhash{$source} == 4 ) {
 		&logger("Source = $source, blocking for $target attack.\n");
 		&ipchain ($source, "", $type);
@@ -498,11 +473,6 @@ sub load_conf {
 			$ignorefile = $1;
 		}
 
-		# Read path to the targetfile.
-		if (/TargetFile\s+(.*)/) {
-			$targetfile = $1;
-		}
-
 		# Get timelimit for blocktime.
 		if (/TimeLimit\s+(.*)/) {
 			$TimeLimit = $1;
@@ -636,43 +606,33 @@ sub clean_up_and_exit {
 	exit;
 }
 
-sub load_targetfile {
-	my $count = 0;
-	open (TARG, "$targetfile") or die "Cannot open $targetfile\n";
-	while (<TARG>) {
-		chop;
-		next if (/\#/);  #skip comments
-		next if (/^\s*$/); # and blank lines
-		$targethash{$_}=1;
-		$count++;
-	}
-	close (TARG);
-	&logger("Loaded $count addresses from $targetfile\n");
-}
-
 #
 ## Function to get alias addresses on red interface.
-## Add them to the target hash.
+## Add them to the ignore hash to prevent from nuking our selfes.
 #
 sub get_aliases {
 	my $ip;
 
-	&debugger("Scanning for aliases on $interface and add them to the target hash...\n");
-
 	# Get name of the red interface.
 	my $interface = &General::get_red_interface;
+
+	&debugger("Scanning for aliases on $interface and add them to the ignore hash...\n");
 
 	# Use shell ip command to get additional addresses.
 	open (IFCONFIG, "/sbin/ip addr show $interface |");
 	my @lines = <IFCONFIG>;
 	close(IFCONFIG);
 
-	# Add grabbed addresses to target hash.
+	# Add grabbed addresses to the ignore hash.
 	foreach $line (@lines) {
 		if ( $line =~ /inet (\d+\.\d+\.\d+\.\d+)/) {
 			$ip = $1;
-			&debugger("Got $ip on $interface ...\n");
-			$targethash{'$ip'} = "1";
+
+			# Check if the address is valid.
+			if (&Network::check_ip_address($ip)) {
+				&debugger("Got $ip on $interface ...\n");
+				$ignore{"ip"}=1;
+			}
 		}
 	}
 }
