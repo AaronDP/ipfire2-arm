@@ -8,14 +8,38 @@
 # An suppected IP will be blocked on all interfaces
 
 use Getopt::Std;
+use Thread::Queue;
+use Linux::Inotify2;
 
+$General::swroot = '/var/ipfire';
+require "${General::swroot}/general-functions.pl";
+require "${General::swroot}/network-functions.pl";
+
+# Path to guardianctrl.
 $guardianctrl = "/usr/local/bin/guardianctrl";
+
+# Default values.
+my $syslogfile = "/var/log/messages";
+my $alert_file = "/var/log/snort.alert";
+my $httpdlog_file = "/var/log/httpd/error_log";
+
+# Files for red and gateway addresses.
+my $redaddress_file = "/var/ipfire/red/local-ipaddress";
+my $gatewayaddress_file = "/var/ipfire/red/remote-ipaddress";
 
 # Array to store information about ignored networks.
 my @ignored_networks = ();
 
+# Array to store the monitored files.
+my @monitored_files = ();
+
 # Hash to store IP addresses and their current state.
 my %blockhash = ();
+
+# Hast to store the last read position of a file.
+# This hash will be used to seek to the last known position and
+# get latest appenden entries.
+my %fileposition = ();
 
 # Option parser for given arguments from command line.
 &getopts ('hc:d');
@@ -31,42 +55,60 @@ if (defined($opt_h)) {
 # Call function to read in the configuration file.
 &load_conf;
 
+# Update array for monitored_files after the config file has been loaded.
+my @monitored_files = ( "$syslogfile",
+			"$alert_file",
+			"$httpdlog_file" );
+
 # Setup signal handler.
 &sig_handler_setup;
 
-&debugger("My ip address and interface are: $hostipaddr $interface\n");
+# Get host address.
+my $hostipaddr = &get_address("$redaddress_file");
 
-if ($hostipaddr !~ /\d+\.\d+\.\d+\.\d+/) {
-	print "This ip address is bad : $hostipaddr\n";
-	die "I need a good host ipaddress\n";
+# Check if we got an address, otherwise we have to cancel here.
+if (! $hostipaddr) {
+	die "Invalid $hostipaddr. Cannot go further!\n";
 }
+&debugger("My host IP-address is: $hostipaddr\n");
 
-$networkaddr = $hostipaddr;
-$networkaddr =~ s/\d+$/0/;
-$gatewayaddr = `cat /var/ipfire/red/remote-ipaddress 2>/dev/null`;
-$broadcastaddr = $hostipaddr;
-$broadcastaddr =~ s/\d+$/255/;
+# Get gateway address.
+my $gatewayaddr = &get_address("$gatewayaddress_file");
+&debugger("My gatewayaddess is: $gatewayaddr\n");
+
+# Calculate networkaddress and broadcast addresses.
+my $networkaddr = $hostipaddr;
+my $networkaddr =~ s/\d+$/0/;
+my $broadcastaddr = $hostipaddr;
+my $broadcastaddr =~ s/\d+$/255/;
 
 # Generate hash for ignored hosts or networks.
 &build_ignore_hash;
 
-
-&debugger("My gatewayaddess is: $gatewayaddr\n");
-
-# This is the target hash. If a packet was destened to any of these, then the
+# This is the target hash. If a packet was sent to any of these addresses, then the
 # sender of that packet will get denied, unless it is on the ignore list..
+my %targethash = (
+		"$networkaddr" => 1,
+		"$broadcastaddr" => 1,
+		"0" => 1,	# This is what gets sent to &checkem if no destination was found.
+		"$hostipaddr" => 1 );
 
-%targethash = ( "$networkaddr" => 1,
-	"$broadcastaddr" => 1,
-	"0" => 1,	# This is what gets sent to &checkem if no
-			# destination was found.
-	"$hostipaddr" => 1);
-
+# Get alias addresses on red.
 &get_aliases;
 
+# Load targetfile if given by the configfile.
 if ( -e $targetfile ) {
 	&load_targetfile;
 }
+
+# Gather file positions.
+&init_fileposition;
+
+# Setup file watcher.
+&create_watcher;
+
+# Create queue for processing inotify events.
+my $queue = new Thread::Queue or die "Could not create new, empty queue. $!\n";
 
 # Check if we are running in debug mode or we can deamonize.
 if (defined($opt_d)) {
@@ -75,115 +117,182 @@ if (defined($opt_d)) {
 	&daemonize;
 }
 
-open (ALERT, $alert_file) or die "can't open alert file: $alert_file: $!\n";
-seek (ALERT, 0, 2); # set the position to EOF.
-# this is the same as a tail -f :)
-open (SYSLOG, "/var/log/messages" ) or die "can't open /var/log/messages: $!\n";
-seek (SYSLOG, 0, 2); # set the position to EOF.
-# this is the same as a tail -f :)
-open (HTTPDLOG, "/var/log/httpd/error_log" ) or die "can't open /var/log/httpd/error_log: $!\n";
-seek (HTTPDLOG, 0, 2); # set the position to EOF.
-# this is the same as a tail -f :)
-$counter=0;
+#
+## Main loop.
+#
+while () {
+	# Read inotify events.
+	my @events = $watcher->read;
 
-for (;;) {
-	sleep 1;
-	if (seek(ALERT,0,1)) {
-		while (<ALERT>) {
-			chop;
-			if (defined($opt_d)) {
-				print "$_\n";
+	# Put the inotify  events into the queue.
+	$queue->enqueue(@events);
+
+	# Get the amount of elements in our queue.
+	# "undef" is returned if it is empty.
+	my $current_elements = $queue->pending();
+
+	# Check if our queue contains some elements.
+	if (defined($current_elements)) {
+		# Grab element data from queue.
+		my $element = $queue->peek();
+
+		# Get changed file.
+		my $changed_file = $element->fullname;
+
+		# Gather last lastposition of the file from hash.
+		my $position = $fileposition{$changed_file};
+
+		# Open the file.
+		open (FILE, $changed_file) or die "Could not open $changed_file. $!\n";
+
+		# Seek to the last position.
+		seek (FILE, $position, 0);
+
+		# A snort alert contains more than one line.
+		my @alert = ();
+
+		if ($changed_file eq "$alert_file") {
+			# Loop through alert file until the complete alert has
+			# read in.
+			while (my $line = <FILE>) {
+				# Remove newlines.
+				chomp $line;
+
+				# Add lines to our array.
+				push(@alert, $line);
 			}
-			if (/\[\*\*\]\s+(.*)\s+\[\*\*\]/) {
-				$type=$1;
-			}
-			if (/(\d+\.\d+\.\d+\.\d+):\d+ -\> (\d+\.\d+\.\d+\.\d+):\d+/) {
-				&checkaction ($1, $2, $type);
-			}
-			if (/(\d+\.\d+\.\d+\.\d+)+ -\> (\d+\.\d+\.\d+\.\d+)+/) {
-				&checkaction ($1, $2, $type);
-			}
+		# Logfiles with a single line are pretty easy to handle.
+		} else {
+			# Get log message.
+			my $message = <FILE>;
+
+			# Remove newline.
+			chomp $message,
+		}
+
+		# Get new file position.
+		my $new_position = tell(FILE);
+
+		# Update hash.
+		$fileposition{$changed_file} = $new_position;
+
+		# Close the file.
+		close(FILE);
+
+		# Use responsible handler based on the modified file.
+		if ("$changed_file" eq "$syslogfile") {
+			&handle_ssh("$message");
+		}
+		elsif ("$changed_file" eq "$alert_file") {
+			&handle_snort(@alert);
+		}
+		elsif ("$changed_file" eq "$httpdlog_file") {
+			&handle_httpd("$message");
+		}
+
+		# Drop processed event from queue.
+		$queue->dequeue();
+	}
+}
+
+#
+# ----- Subroutines -----
+#
+
+#
+## Function to detect SSH-Bruteforce Attacks.
+#
+sub handle_ssh ($) {
+	my $message = $_[0];
+
+	# Check for failed password attempts.
+	if ($message =~/.*sshd.*Failed password for .* from (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).*/) {
+		&checkaction ($1, "", "possible SSH-Bruteforce Attack");
+	}
+
+	# This should catch Bruteforce Attacks with enabled preauth
+	elsif ($message =~ /.*sshd.*Received disconnect from (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):.*\[preauth\]/) {
+		&checkaction ($1, "", "possible SSH-Bruteforce Attack, failed preauth");
+	}
+}
+
+#
+## Function to parse snort alerts.
+#
+sub handle_snort (@) {
+	my @alert = @_;
+
+	# Loop through the given array and parse the lines.
+	foreach my $line (@alert) {
+		if ($line =~ /\[\*\*\]\s+(.*)\s+\[\*\*\]/) {
+			$type=$1;
+		}
+
+		# Look for a line like xxx.xxx.xxx.xxx:xxx -> xxx.xxx.xxx.xxx:xxx
+		elsif ($line =~ /(\d+\.\d+\.\d+\.\d+):\d+ -\> (\d+\.\d+\.\d+\.\d+):\d+/) {
+			&checkaction ($1, $2, $type);
+		}
+
+		# Search for a line like xxx.xxx.xxx.xxx -> xxx.xxx.xxx.xxx
+		elsif ($line =~ /(\d+\.\d+\.\d+\.\d+)+ -\> (\d+\.\d+\.\d+\.\d+)+/) {
+			&checkaction ($1, $2, $type);
 		}
 	}
+}
 
-	if (seek(SYSLOG,0,1)) {
-		while (<SYSLOG>) {
-			chop;
-			if ($_=~/.*sshd.*Failed password for .* from (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).*/) {
-				&checkaction ($1, "", "possible SSH-Bruteforce Attack");}
+#
+## Function to detect HTTPD Login-Bruteforce attempts.
+#
+sub handle_httpd ($) {
+	my $message = $_[0];
 
-			# This should catch Bruteforce Attacks with enabled preauth
-			if ($_ =~ /.*sshd.*Received disconnect from (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):.*\[preauth\]/) {
-				&checkaction ($1, "", "possible SSH-Bruteforce Attack, failed preauth");}
-			}
+	# This should catch Bruteforce Attacks on the WUI
+	if ($message =~ /.*\[error\] \[client (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\] user(.*) not found:.*/) {
+		&checkaction ($1, "", "possible WUI-Bruteforce Attack, wrong user" .$2);
 	}
 
-	if (seek(HTTPDLOG,0,1)){
-		while (<HTTPDLOG>) {
-			chop;
-			# This should catch Bruteforce Attacks on the WUI
-			if ($_ =~ /.*\[error\] \[client (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\] user(.*) not found:.*/) {
-				&checkaction ($1, "", "possible WUI-Bruteforce Attack, wrong user" .$2);
-			}
-
-			if ($_ =~ /.*\[error\] \[client (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\] user(.*): authentication failure for.*/) {
-				&checkaction ($1, "", "possible WUI-Bruteforce Attack, wrong password for user" .$2);
-			}
-		}
-	}
-
-# Run this stuff every 30 seconds..
-	if ($counter == 30) {
-		&remove_blocks; # This might get moved elsewhere, depending on how much load
-				# it puts on the system..
-		&check_log_name;
-		&check_log_ssh;
-		&check_log_http;
-		$counter=0;
-	} else {
-		$counter=$counter+1;
+	# Detect Password brute-forcing.
+	elsif ($message =~ /.*\[error\] \[client (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\] user(.*): authentication failure for.*/) {
+		&checkaction ($1, "", "possible WUI-Bruteforce Attack, wrong password for user" .$2);
 	}
 }
 
-sub check_log_name {
-	my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,
-	$atime,$mtime,$ctime,$blksize,$blocks) = stat($alert_file);
-	if ($size < $previous_size) {	     # The filesize is smaller than last
-		close (ALERT);               # we checked, so we need to reopen it
-		open (ALERT, "$alert_file"); # This should still work in our main while
-		$previous_size=$size;        # loop (I hope)
-		&debugger("Log filename changed. Reopening $alert_file\n");
-	} else {
-		$previous_size=$size;
+#
+## Function to create inotify tasks for each monitored file.
+#
+sub create_watcher {
+	our $watcher = new Linux::Inotify2 or die "Could not use inotify. $!\n";
+
+	foreach my $file (@monitored_files) {
+		$watcher->watch("$file", IN_MODIFY) or die "Could not monitor $file. $!\n";
 	}
 }
 
-sub check_log_ssh {
-	my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,
-	$atime,$mtime,$ctime,$blksize,$blocks) = stat("/var/log/messages");
-	if ($size < $previous_size_ssh) {			# The filesize is smaller than last
-		close (SYSLOG);					# we checked, so we need to reopen it
-		open (SYSLOG, "/var/log/messages");		# This should still work in our main while
-		$previous_size_ssh=$size;			# loop (I hope)
-		&debugger("Log filesize changed. Reopening /var/log/messages\n");
-	} else {
-		$previous_size_ssh=$size;
-	}
-}
+#
+## Function to init the filepositions for each monitored file.
+## The information will be stored in a hash and easily can be
+## accessed again.
+#
+sub init_fileposition {
+	foreach my $file (@monitored_files) {
+		# Open the file.
+		open(FILE, $file) or die "Could not open $file. $!\n";
 
-sub check_log_http {
-	my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,
-	$atime,$mtime,$ctime,$blksize,$blocks) = stat("/var/log/httpd/error_log");
-	if ($size < $previous_size_http) {			# The filesize is smaller than last
-		close (HTTPDLOG);					# we checked, so we need to reopen it
-		open (HTTPDLOG, "/var/log/httpd/error_log");	# This should still work in our main while
-		$previous_size_http=$size;			# loop (I hope)
-		&debugger("Log filesize changed. Reopening /var/log/httpd/error_log\n");
-	} else {
-		$previous_size_http=$size;
-	}
-}
+		# Seek to the end of file (EOF).
+		seek(FILE, 0, 2);
 
+		# Get the position.
+		my $position = tell(FILE);
+
+		# Store position into the positon hash.
+		$fileposition{$file} = $position;
+
+		# Close the file.
+		close(FILE);
+	}
+
+	return %fileposition;
+}
 
 sub checkaction {
 	my ($source, $dest, $type) = @_;
@@ -349,78 +458,94 @@ sub build_ignore_hash {
 	}
 }
 
+#
+## Function to parse the configuration file.
+#
 sub load_conf {
+	# Detect if a different than the default file should be load.
 	if ($opt_c eq "") {
 		$opt_c = "/etc/guardian/guardian.conf";
 	}
 
+	# Check if the given configuration file or the default one exists and can be read.
 	if (! -e $opt_c) {
 		die "Need a configuration file.. please use to the -c option to name a configuration file\n";
 	}
 
+	# Open the file.
 	open (CONF, $opt_c) or die "Cannot read the config file $opt_c, $!\n";
 	while (<CONF>) {
 		chop;
-		next if (/^\s*$/); #skip blank lines
-		next if (/^#/); # skip comment lines
+
+		# Skip blank lines.
+		next if (/^\s*$/);
+
+		# Skip comments.
+		next if (/^#/);
+
+		# Read-in path to logfile.
 		if (/LogFile\s+(.*)/) {
 			$logfile = $1;
 		}
-		if (/Interface\s+(.*)/) {
-			$interface = $1;
-			if ( $interface eq "" ) {
-				$interface = `cat /var/ipfire/ethernet/settings | grep RED_DEV | cut -d"=" -f2`;
-			}
-		}
+
+		# Get path to snort alert file.
 		if (/AlertFile\s+(.*)/) {
 			$alert_file = $1;
 		}
+
+		# Omit path to the ignorefile.
 		if (/IgnoreFile\s+(.*)/) {
 			$ignorefile = $1;
 		}
+
+		# Read path to the targetfile.
 		if (/TargetFile\s+(.*)/) {
 			$targetfile = $1;
 		}
+
+		# Get timelimit for blocktime.
 		if (/TimeLimit\s+(.*)/) {
 			$TimeLimit = $1;
 		}
-		if (/HostIpAddr\s+(.*)/) {
-			$hostipaddr = $1;
-		}
+
+		# HostGatewayByte for automatically adding the gateway to
+		# the ignore hash.
 		if (/HostGatewayByte\s+(.*)/) {
 			$hostgatewaybyte = $1;
 		}
 	}
-	
-	if ($alert_file eq "") {
-		&debugger("Warning! AlertFile is undefined.. Assuming /var/log/snort.alert\n");
-		$alert_file="/var/log/snort.alert";
-	}
-	if ($hostipaddr eq "") {
-		&debugger("Warning! HostIpAddr is undefined! Attempting to guess..\n");
-		$hostipaddr = `cat /var/ipfire/red/local-ipaddress`;
-		&debugger("Got it.. your HostIpAddr is $hostipaddr\n");
-	}
+
+	# Validate input.
+	#
+	# Check if an ignorefile has been defined.
 	if ($ignorefile eq "") {
 		&debugger("Warning! IgnoreFile is undefined.. going with default ignore list (hostname and gateway)!\n");
 	}
+
+	# Check the HostGatewayByte has been set.
 	if ($hostgatewaybyte eq "") {
 		&debugger("Warning! HostGatewayByte is undefined.. gateway will not be in ignore list!\n");
 	}
+
+	# Check if a path for the LogFile has been given.
 	if ($logfile eq "") {
 		print "Warning! LogFile is undefined.. Assuming debug mode, output to STDOUT\n";
 		$opt_d = 1;
 	}
+
+	# Check if our logfile is writeable.
 	if (! -w $logfile) {
 		print "Warning! Logfile is not writeable! Engaging debug mode, output to STDOUT\n";
 		$opt_d = 1;
 	}
 
+	# Check if guardianctrl is available.
 	if (! -e $guardianctrl) {
 		print "Error! Could not find $guardianctrl. Exiting. \n";
 		exit;
 	}
 
+	# Check if a TimeLimit has been provided or set to default.
 	if ($TimeLimit eq "") {
 		&debugger("Warning! Time limit not defined. Defaulting to absurdly long time limit\n");
 		$TimeLimit = 999999999;
@@ -525,14 +650,24 @@ sub load_targetfile {
 	&logger("Loaded $count addresses from $targetfile\n");
 }
 
+#
+## Function to get alias addresses on red interface.
+## Add them to the target hash.
+#
 sub get_aliases {
 	my $ip;
+
 	&debugger("Scanning for aliases on $interface and add them to the target hash...\n");
 
+	# Get name of the red interface.
+	my $interface = &General::get_red_interface;
+
+	# Use shell ip command to get additional addresses.
 	open (IFCONFIG, "/sbin/ip addr show $interface |");
 	my @lines = <IFCONFIG>;
 	close(IFCONFIG);
 
+	# Add grabbed addresses to target hash.
 	foreach $line (@lines) {
 		if ( $line =~ /inet (\d+\.\d+\.\d+\.\d+)/) {
 			$ip = $1;
@@ -540,6 +675,33 @@ sub get_aliases {
 			$targethash{'$ip'} = "1";
 		}
 	}
+}
+
+#
+## Function to get an IP-address from a given file.
+## The IP-address has to be part of the first line.
+#
+sub get_address ($) {
+	my $file = $_[0];
+
+	# Open the given file.
+	open (FILE, "$file") or die "Could not open $file. $!\n";
+
+	# Get address.
+	my $address = <FILE>;
+
+	# Close file.
+	close (FILE);
+
+	# Removing newlines.
+	chomp $address;
+
+	# Check if the grabbed address is valid.
+	if (&Network::check_ip_address($address)) {
+		return $address;
+	}
+
+	return;
 }
 
 # this sub converts a dotted IP to a decimal IP
