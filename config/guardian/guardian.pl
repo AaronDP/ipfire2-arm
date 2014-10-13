@@ -10,15 +10,26 @@
 use Getopt::Std;
 use Thread::Queue;
 use Linux::Inotify2;
+use strict;
 
 $General::swroot = '/var/ipfire';
 require "${General::swroot}/general-functions.pl";
 require "${General::swroot}/network-functions.pl";
 
-# Path to guardianctrl.
-$guardianctrl = "/usr/local/bin/guardianctrl";
+# Used variables and default values..
+my $configfile = "$General::swroot/guardian/guardian.conf";
+my $ignorefile;
+my $logfile;
 
-# Default values.
+my $TimeLimit = "86400";
+my $hostgatewaybyte = "1";
+
+our $watcher;
+
+# Path to guardianctrl.
+my $guardianctrl = "/usr/local/bin/guardianctrl";
+
+# Watched files.
 my $syslogfile = "/var/log/messages";
 my $alert_file = "/var/log/snort.alert";
 my $httpdlog_file = "/var/log/httpd/error_log";
@@ -33,11 +44,17 @@ my @ignored_networks = ();
 # Array to store the monitored files.
 my @monitored_files = ();
 
+# Hash to store the given command line options.
+my %options = ();
+
 # Hash to store IP addresses and their current state.
 my %addresshash = ();
 
 # Hash to store blocked addresses and the remaining time.
 my %blockhash = ();
+
+# Hash to store ignored addresses.
+my %ignorehash = ();
 
 # Hast to store the last read position of a file.
 # This hash will be used to seek to the last known position and
@@ -45,8 +62,8 @@ my %blockhash = ();
 my %fileposition = ();
 
 # Option parser for given arguments from command line.
-&getopts ('hc:d');
-if (defined($opt_h)) {
+&getopts ("hc:d", \%options);
+if (defined($options{"h"})) {
 	print "Guardian v1.7 \n";
 	print "guardian.pl [-hd] <-c config>\n";
 	print " -h  shows help\n";
@@ -95,7 +112,7 @@ my $gatewayaddr = &get_address("$gatewayaddress_file");
 my $queue = new Thread::Queue or die "Could not create new, empty queue. $!\n";
 
 # Check if we are running in debug mode or we can deamonize.
-if (defined($opt_d)) {
+if (defined($options{"d"})) {
 	&debugger("Running in debug mode...\n");
 } else {
 	&daemonize;
@@ -134,6 +151,7 @@ while () {
 
 		# A snort alert contains more than one line.
 		my @alert = ();
+		my $message;
 
 		if ($changed_file eq "$alert_file") {
 			# Loop through alert file until the complete alert has
@@ -244,7 +262,7 @@ sub handle_httpd ($) {
 ## Function to create inotify tasks for each monitored file.
 #
 sub create_watcher {
-	our $watcher = new Linux::Inotify2 or die "Could not use inotify. $!\n";
+	$watcher = new Linux::Inotify2 or die "Could not use inotify. $!\n";
 
 	foreach my $file (@monitored_files) {
 		$watcher->watch("$file", IN_MODIFY) or die "Could not monitor $file. $!\n";
@@ -294,7 +312,7 @@ sub checkaction {
 	return 1 if ($source eq $gatewayaddr);
 
 	# Watch if the source address is part of our ignore list.
-	if ($ignore{$source} == 1) {
+	if ($ignorehash{$source} == 1) {
 		&logger("Ignoring attack because $source is in my ignore list!\n");
 		return 1;
 	}
@@ -351,8 +369,8 @@ sub build_ignore_hash {
 	my @subnets;
 
 	# Add our gatewayaddress and hostipaddr to the ignore hash.
-	$ignore{$gatewayaddr}=1;
-	$ignore{$hostipaddr}=1;
+	$ignorehash{$gatewayaddr}=1;
+	$ignorehash{$hostipaddr}=1;
 
 	# Read-in the file if an ignorefile has been provided.
 	if ($ignorefile ne "") {
@@ -370,7 +388,7 @@ sub build_ignore_hash {
 			# Check if we got a valid single address.
 			if (&Network::check_ip_address($_)) {
 				# Add single address to the ignore hash.
-				$ignore{$_}=1;
+				$ignorehash{$_}=1;
 			}
 			# Check if the input contains a valid address and mask.
 			elsif (&Network::check_network($_)) {
@@ -432,17 +450,17 @@ sub build_ignore_hash {
 #
 sub load_conf {
 	# Detect if a different than the default file should be load.
-	if ($opt_c eq "") {
-		$opt_c = "/etc/guardian/guardian.conf";
+	if ($options{"c"} ne "") {
+		my $configfile = $options{"c"};
 	}
 
 	# Check if the given configuration file or the default one exists and can be read.
-	if (! -e $opt_c) {
+	if (! -e $configfile) {
 		die "Need a configuration file.. please use to the -c option to name a configuration file\n";
 	}
 
 	# Open the file.
-	open (CONF, $opt_c) or die "Cannot read the config file $opt_c, $!\n";
+	open (CONF, $configfile) or die "Cannot read the config file $configfile, $!\n";
 	while (<CONF>) {
 		chop;
 
@@ -486,33 +504,22 @@ sub load_conf {
 		&debugger("Warning! IgnoreFile is undefined.. going with default ignore list (hostname and gateway)!\n");
 	}
 
-	# Check the HostGatewayByte has been set.
-	if ($hostgatewaybyte eq "") {
-		&debugger("Warning! HostGatewayByte is undefined.. gateway will not be in ignore list!\n");
-	}
-
 	# Check if a path for the LogFile has been given.
 	if ($logfile eq "") {
 		print "Warning! LogFile is undefined.. Assuming debug mode, output to STDOUT\n";
-		$opt_d = 1;
+		$options{"d"} = 1;
 	}
 
 	# Check if our logfile is writeable.
 	if (! -w $logfile) {
 		print "Warning! Logfile is not writeable! Engaging debug mode, output to STDOUT\n";
-		$opt_d = 1;
+		$options{"d"} = 1;
 	}
 
 	# Check if guardianctrl is available.
 	if (! -e $guardianctrl) {
 		print "Error! Could not find $guardianctrl. Exiting. \n";
 		exit;
-	}
-
-	# Check if a TimeLimit has been provided or set to default.
-	if ($TimeLimit eq "") {
-		&debugger("Warning! Time limit not defined. Defaulting to absurdly long time limit\n");
-		$TimeLimit = 999999999;
 	}
 }
 
@@ -543,7 +550,7 @@ sub debugger {
 	my $message = $_[0];
 
 	# Only write to STDOUT if debug mode has been enabled.
-	if (defined($opt_d)) {
+	if (defined($options{"d"})) {
 		# Print out to STDOUT.
 		print STDOUT $message;
 	}
@@ -658,14 +665,14 @@ sub get_aliases {
 	close(IFCONFIG);
 
 	# Add grabbed addresses to the ignore hash.
-	foreach $line (@lines) {
+	foreach my $line (@lines) {
 		if ( $line =~ /inet (\d+\.\d+\.\d+\.\d+)/) {
 			$ip = $1;
 
 			# Check if the address is valid.
 			if (&Network::check_ip_address($ip)) {
 				&debugger("Got $ip on $interface ...\n");
-				$ignore{"ip"}=1;
+				$ignorehash{"ip"}=1;
 			}
 		}
 	}
