@@ -589,24 +589,28 @@ sub logger {
 	}
 }
 
+#
+## Function to daemonize guardian.
+#
 sub daemonize {
-	my ($home);
- 	if (fork()) {
-# parent
-		exit(0);
-	} else {
-# child
-		&logger("debug", "Guardian process id $$\n");
-		$home = (getpwuid($>))[7] || die "No home directory!\n";
-		chdir($home);                   # go to my homedir
-		setpgrp(0,0);                   # become process leader
-		close(STDOUT);
-		close(STDIN);
-		close(STDERR);
-		print "Testing...\n";
+	my $home;
+
+	# Daemonize guardian.
+	my $pid = fork();
+
+	# Die if we got no process id returned.
+	if ($pid < 0) {
+		die "Could not fork: $!\n";
+	}
+	# Everything done.
+	elsif ($pid) {
+		exit 0;
 	}
 }
 
+#
+## Function for capturing process signals.
+#
 sub sig_handler_setup {
 	$SIG{INT} = \&clean_up_and_exit; # kill -2
 	$SIG{TERM} = \&clean_up_and_exit; # kill -9
