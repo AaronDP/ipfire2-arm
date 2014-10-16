@@ -19,6 +19,7 @@ require "${General::swroot}/network-functions.pl";
 # Used variables and default values..
 my $configfile = "$General::swroot/guardian/guardian.conf";
 my $ignorefile;
+my $loglevel;
 my $logfile;
 
 my $TimeLimit = "86400";
@@ -46,6 +47,13 @@ my @monitored_files = ();
 
 # Hash to store the given command line options.
 my %options = ();
+
+# Hash to store all supported loglevels.
+my %loglevels = (
+	"off" => 0,
+	"info" => 1,
+	"debug" => 2
+);
 
 # Hash to store IP addresses and their current state.
 my %addresshash = ();
@@ -76,9 +84,11 @@ if (defined($options{"h"})) {
 &load_conf;
 
 # Update array for monitored_files after the config file has been loaded.
-my @monitored_files = ( "$syslogfile",
-			"$alert_file",
-			"$httpdlog_file" );
+my @monitored_files = (
+	"$syslogfile",
+	"$alert_file",
+	"$httpdlog_file"
+);
 
 # Setup signal handler.
 &sig_handler_setup;
@@ -90,11 +100,11 @@ my $hostipaddr = &get_address("$redaddress_file");
 if (! $hostipaddr) {
 	die "Invalid $hostipaddr. Cannot go further!\n";
 }
-&debugger("My host IP-address is: $hostipaddr\n");
+&logger("debug", "My host IP-address is: $hostipaddr\n");
 
 # Get gateway address.
 my $gatewayaddr = &get_address("$gatewayaddress_file");
-&debugger("My gatewayaddess is: $gatewayaddr\n");
+&logger("debug", "My gatewayaddess is: $gatewayaddr\n");
 
 # Generate hash for ignored hosts or networks.
 &build_ignore_hash;
@@ -113,7 +123,7 @@ my $queue = new Thread::Queue or die "Could not create new, empty queue. $!\n";
 
 # Check if we are running in debug mode or we can deamonize.
 if (defined($options{"d"})) {
-	&debugger("Running in debug mode...\n");
+	&logger("debug", "Running in debug mode...\n");
 } else {
 	&daemonize;
 }
@@ -313,7 +323,7 @@ sub checkaction {
 
 	# Watch if the source address is part of our ignore list.
 	if ($ignorehash{$source} == 1) {
-		&logger("Ignoring attack because $source is in my ignore list!\n");
+		&logger("info", "Ignoring attack because $source is in my ignore list!\n");
 		return 1;
 	}
 
@@ -330,7 +340,7 @@ sub checkaction {
 		# Check if $source addres is part of an ignored network.
 		if (($src >= $first) && ($src <= $last)) {
 			# Write out log messages.
-			&logger("Ignoring attack because $source is part of an ignored network\n");
+			&logger("info", "Ignoring attack because $source is part of an ignored network\n");
 			return 1;
 		}
 	}
@@ -338,7 +348,7 @@ sub checkaction {
 	# Check if the "source" reached our blocking count (4).
 	if ( $addresshash{$source} == 4 ) {
 		# Write out log message.
-		&logger("Blocking $source: $message\n");
+		&logger("info", "Blocking $source: $message\n");
 
 		# Block the source address.
 		&call_block($source);
@@ -352,12 +362,12 @@ sub checkaction {
 		# Set addresshash to "1".
 		$addresshash{$source} = 1;
 
-		&debugger("Start counting for $source\n");
+		&logger("debug", "Start counting for $source\n");
 		return 0;
 	} else {
 		# Increase counting of existing addresses.
 		$addresshash{$source} = $addresshash{$source}+1;
-		&debugger("Source $source count $addresshash{$source} - No action done yet.\n");
+		&logger("debug", "Source $source count $addresshash{$source} - No action done yet.\n");
 	}
 }
 
@@ -433,7 +443,7 @@ sub build_ignore_hash {
 		}
 
 		# Write out log message.
-		&debugger("Loaded $count entries from $ignorefile\n");
+		&logger("debug", "Loaded $count entries from $ignorefile\n");
 
 		# Return ignored_networks array.
 		return @ignored_networks;
@@ -441,7 +451,7 @@ sub build_ignore_hash {
 	} else {
 
 		# Handle empty or missing ignorefile.
-		&debugger("No ignore file was loaded!\n");
+		&logger("debug", "No ignore file was loaded!\n");
 	}
 }
 
@@ -469,6 +479,11 @@ sub load_conf {
 
 		# Skip comments.
 		next if (/^#/);
+
+		# Get loglevel.
+		if (/LogLevel\s+(.*)/) {
+			$loglevel = $1;
+		}
 
 		# Read-in path to logfile.
 		if (/LogFile\s+(.*)/) {
@@ -501,18 +516,25 @@ sub load_conf {
 	#
 	# Check if an ignorefile has been defined.
 	if ($ignorefile eq "") {
-		&debugger("Warning! IgnoreFile is undefined.. going with default ignore list (hostname and gateway)!\n");
+		&logger("debug", "Warning! IgnoreFile is undefined.. going with default ignore list (hostname and gateway)!\n");
+	}
+
+	# Check if a valid LogLevel has been given or use default one (info).
+	if(!$loglevels{$loglevel}) {
+		$loglevel = "info";
 	}
 
 	# Check if a path for the LogFile has been given.
 	if ($logfile eq "") {
 		print "Warning! LogFile is undefined.. Assuming debug mode, output to STDOUT\n";
+		$loglevel = "debug";
 		$options{"d"} = 1;
 	}
 
 	# Check if our logfile is writeable.
 	if (! -w $logfile) {
 		print "Warning! Logfile is not writeable! Engaging debug mode, output to STDOUT\n";
+		$loglevel = "debug";
 		$options{"d"} = 1;
 	}
 
@@ -524,35 +546,46 @@ sub load_conf {
 }
 
 #
-## Function to write messages to guardians logfile.
+## Function to handle logging.
+#
+## This function requires two arguments: The required loglevel and
+## the message itself. The required loglevel will be compared with the
+## current one to gather if the given message should be logged or ignored.
 #
 sub logger {
-	my $message = $_[0];
-	my $date = localtime();
+	my ($level, $message) = @_;
 
-	# Open Logfile.
-	open (LOG, ">>$logfile");
+	if(!$loglevels{$level}) {
+		&logger("debug", "The logger has been called with an invalid loglevel ($level)!\n");
+		return;
+	}
 
-	# Append message.
-	print LOG $date.": ".$message;
+	# Get value for the current used loglevel.
+	my $current_level = $loglevels{$loglevel};
 
-	# Close the file afterwards.
-	close (LOG);
+	# Get value for the required loglevel.
+	my $required_level = $loglevels{$level};
 
-	# Also print send to STDOUT if we are running in debug mode.
-	&debugger("$message");
-}
+	# Check if the message should be handled.
+	if ($current_level >= $required_level) {
+		# Check if we are running in debug mode or we should
+		# log to a logfile.
+		if (((defined($options{"d"}))) || ($logfile eq "")) {
+			# Print out to STDOUT.
+			print STDOUT $message;
+		} else {
+			# Get date.
+			my $date = localtime();
 
-#
-## Function to write debug content to STDOUT.
-#
-sub debugger {
-	my $message = $_[0];
+			# Open Logfile.
+			open (LOG, ">>$logfile") or die "Could not open $logfile for writing. $!\n";
 
-	# Only write to STDOUT if debug mode has been enabled.
-	if (defined($options{"d"})) {
-		# Print out to STDOUT.
-		print STDOUT $message;
+			# Append message.
+			print LOG $date.": ".$message;
+
+			# Close the file afterwards.
+			close (LOG);
+		}
 	}
 }
 
@@ -563,7 +596,7 @@ sub daemonize {
 		exit(0);
 	} else {
 # child
-		&debugger("Guardian process id $$\n");
+		&logger("debug", "Guardian process id $$\n");
 		$home = (getpwuid($>))[7] || die "No home directory!\n";
 		chdir($home);                   # go to my homedir
 		setpgrp(0,0);                   # become process leader
@@ -595,7 +628,7 @@ sub remove_blocks {
 		# Check if the time for the address has expired.
 		if ($blockhash{$address} < $time) {
 			# Call unblock.
-			&debugger("Block time for $address has expired\n");
+			&logger("info", "Block time for $address has expired\n");
 			&call_unblock($address);
 
 			# Drop address from blockhash.
@@ -636,12 +669,12 @@ sub call_unblock ($) {
 #
 ## Subroutine to handle shutdown of the programm.
 sub clean_up_and_exit {
-	&debugger("received kill sig.. shutting down\n");
+	&logger("debug", "received kill sig.. shutting down\n");
 
 	# Unblock all currently blocked addresses.
 	foreach my $address (keys %blockhash) {
 		# Unblock the address.
-		&debugger("Removing $address for shutdown\n");
+		&logger("debug", "Removing $address for shutdown\n");
 		&call_unblock ($address);
 	}
 	exit;
@@ -657,7 +690,7 @@ sub get_aliases {
 	# Get name of the red interface.
 	my $interface = &General::get_red_interface;
 
-	&debugger("Scanning for aliases on $interface and add them to the ignore hash...\n");
+	&logger("debug", "Scanning for aliases on $interface and add them to the ignore hash...\n");
 
 	# Use shell ip command to get additional addresses.
 	open (IFCONFIG, "/sbin/ip addr show $interface |");
@@ -671,7 +704,7 @@ sub get_aliases {
 
 			# Check if the address is valid.
 			if (&Network::check_ip_address($ip)) {
-				&debugger("Got $ip on $interface ...\n");
+				&logger("debug", "Got $ip on $interface ...\n");
 				$ignorehash{"ip"}=1;
 			}
 		}
