@@ -1,11 +1,27 @@
 #!/usr/bin/perl
-# based on V 1.7 guardian enhanced for IPFire and snort 2.8
-# Read the readme file for changes
+###############################################################################
+#                                                                             #
+# IPFire.org - A linux based firewall                                         #
+# Copyright (C) 2014  IPFire Development Team                                 #
+#                                                                             #
+# This program is free software: you can redistribute it and/or modify        #
+# it under the terms of the GNU General Public License as published by        #
+# the Free Software Foundation, either version 3 of the License, or           #
+# (at your option) any later version.                                         #
+#                                                                             #
+# This program is distributed in the hope that it will be useful,             #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+# GNU General Public License for more details.                                #
+#                                                                             #
+# You should have received a copy of the GNU General Public License           #
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.       #
+#                                                                             #
+###############################################################################
+
+# Inspired by the idea of guardian from http://www.chaotic.org/guardian/
 #
-# Enhanced for IPFire by IPFire Team
-# Added Portscan detection for non syslog system
-# Added SSH-Watch for SSH-Bruteforce Attacks
-# An suppected IP will be blocked on all interfaces
+# Rewritten and massively enhanced by the IPFire Development Team.
 
 use Getopt::Std;
 use Thread::Queue;
@@ -72,7 +88,7 @@ my %fileposition = ();
 # Option parser for given arguments from command line.
 &getopts ("hc:d", \%options);
 if (defined($options{"h"})) {
-	print "Guardian v1.7 \n";
+	print "Guardian v2.0 \n";
 	print "guardian.pl [-hd] <-c config>\n";
 	print " -h  shows help\n";
 	print " -d  run in debug mode (doesn't fork, output goes to STDOUT)\n";
