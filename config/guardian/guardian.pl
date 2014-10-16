@@ -143,7 +143,7 @@ while () {
 	my $current_elements = $queue->pending();
 
 	# Check if our queue contains some elements.
-	if (defined($current_elements)) {
+	if ($current_elements > 0) {
 		# Grab element data from queue.
 		my $element = $queue->peek();
 
@@ -615,7 +615,24 @@ sub sig_handler_setup {
 	$SIG{INT} = \&clean_up_and_exit; # kill -2
 	$SIG{TERM} = \&clean_up_and_exit; # kill -9
 	$SIG{QUIT} = \&clean_up_and_exit; # kill -3
-#  $SIG{HUP} = \&flush_and_reload; # kill -1
+	$SIG{HUP} = \&reload_on_sighup; # kill -1
+}
+
+#
+## Function to handle sighup events.
+#
+sub reload_on_sighup {
+	# Print out log message.
+	&logger("info", "Recived SIGHUP signal - Reloading configfile and recreate the ignorelist.\n");
+
+	# Reload config file.
+	&load_conf;
+
+	# Rebuild ignorehash.
+	&build_ignore_hash;
+
+	# Grab alias adresses on red.
+	&get_aliases;
 }
 
 #
@@ -673,7 +690,7 @@ sub call_unblock ($) {
 #
 ## Subroutine to handle shutdown of the programm.
 sub clean_up_and_exit {
-	&logger("debug", "received kill sig.. shutting down\n");
+	&logger("debug", "Received KILL signal - Shutting down\n");
 
 	# Unblock all currently blocked addresses.
 	foreach my $address (keys %blockhash) {
