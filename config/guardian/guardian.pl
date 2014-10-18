@@ -291,10 +291,18 @@ sub handle_httpd ($) {
 sub create_watcher {
 	$watcher = new Linux::Inotify2 or die "Could not use inotify. $!\n";
 
+	# Check if the array contains elements.
+	if(@monitored_files) {
 	# Create watcher for each file in array.
-	foreach my $file (@monitored_files) {
-		$watcher->watch("$file", IN_MODIFY) or die "Could not monitor $file. $!\n";
-		&logger("debug", "Created watcher for $file\n");
+		foreach my $file (@monitored_files) {
+			$watcher->watch("$file", IN_MODIFY) or die "Could not monitor $file. $!\n";
+			&logger("debug", "Created watcher for $file\n");
+		}
+	} else {
+	&logger("info", "No file(s) to watch. Exiting.\n");
+
+	# Call subroutine to safe exit the programm.
+	&clean_up_and_exit;
 	}
 }
 
