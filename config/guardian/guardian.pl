@@ -511,7 +511,12 @@ sub load_conf {
 			$alert_file = $1;
 		}
 
-		# Omit path to the ignorefile.
+		# Omit path to httpd error log.
+		if (/HTTPDLogFile\s+(.*)/) {
+			$httpdlog_file = $1;
+		}
+
+		# Read-in path to the ignorefile.
 		if (/IgnoreFile\s+(.*)/) {
 			$ignorefile = $1;
 		}
