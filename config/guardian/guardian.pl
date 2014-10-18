@@ -46,6 +46,11 @@ our $watcher;
 # Path to guardianctrl.
 my $guardianctrl = "/usr/local/bin/guardianctrl";
 
+# Default values for built-in functions.
+my $enable_snort = "true";
+my $enable_ssh = "true";
+my $enable_httpd = "true";
+
 # Watched files.
 my $syslogfile = "/var/log/messages";
 my $alert_file = "/var/log/snort.alert";
@@ -100,11 +105,7 @@ if (defined($options{"h"})) {
 &load_conf;
 
 # Update array for monitored_files after the config file has been loaded.
-my @monitored_files = (
-	"$syslogfile",
-	"$alert_file",
-	"$httpdlog_file"
-);
+@monitored_files = &generate_monitored_files;
 
 # Setup signal handler.
 &sig_handler_setup;
@@ -290,8 +291,10 @@ sub handle_httpd ($) {
 sub create_watcher {
 	$watcher = new Linux::Inotify2 or die "Could not use inotify. $!\n";
 
+	# Create watcher for each file in array.
 	foreach my $file (@monitored_files) {
 		$watcher->watch("$file", IN_MODIFY) or die "Could not monitor $file. $!\n";
+		&logger("debug", "Created watcher for $file\n");
 	}
 }
 
@@ -531,6 +534,21 @@ sub load_conf {
 		if (/HostGatewayByte\s+(.*)/) {
 			$hostgatewaybyte = $1;
 		}
+
+		# Read-in which functions should be used.
+		#
+		# Snort
+		if (/EnableSnortMonitoring\s+(.*)/) {
+			$enable_snort = $1;
+		}
+		# SSH - Brute force attempts.
+		if (/EnableSSHMonitoring\s+(.*)/) {
+			$enable_ssh = $1;
+		}
+		# HTTPD (WUI) - Brute force attempts.
+		if (/EnableHTTPDMonitoring\s+(.*)/) {
+			$enable_httpd = $1;
+		}
 	}
 
 	# Validate input.
@@ -564,6 +582,31 @@ sub load_conf {
 		print "Error! Could not find $guardianctrl. Exiting. \n";
 		exit;
 	}
+}
+
+#
+## Function to generate the array for files to monitor.
+#
+sub generate_monitored_files {
+	my @files = ();
+
+	# Add snort alert file if enabled.
+	if ($enable_snort eq "true" or $enable_snort eq "yes") {
+		push(@files, $alert_file);
+	}
+
+	# Add syslogfile for SSH monitoring if enabled.
+	if ($enable_ssh eq "true" or $enable_ssh eq "yes") {
+		push(@files, $syslogfile);
+	}
+
+	# Add httpd logfile if the monitoring should be enabled.
+	if ($enable_httpd eq "true" or $enable_httpd eq "yes") {
+		push(@files, $httpdlog_file);
+	}
+
+	# Return our array.
+	return @files
 }
 
 #
@@ -654,6 +697,15 @@ sub reload_on_sighup {
 
 	# Grab alias adresses on red.
 	&get_aliases;
+
+	# Update array for monitored files.
+	@monitored_files = &generate_monitored_files;
+
+	# Re-create inotify watchers.
+	&create_watcher;
+
+	# Grab file positions.
+	&init_fileposition;
 }
 
 #
