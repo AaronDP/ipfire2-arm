@@ -39,7 +39,6 @@ my $memory=();
 my @memory=();
 my @pid=();
 my @guardian=();
-my %cgiparams=();
 
 # Path to the guardian.ignore file.
 my $ignorefile ='/var/ipfire/guardian/guardian.ignore';
@@ -58,7 +57,8 @@ $settings{'GUARDIAN_ENABLED'} = 'off';
 $settings{'GUARDIAN_ENABLE_SNORT'} = 'on';
 $settings{'GUARDIAN_ENABLE_SSH'} = 'on';
 $settings{'GUARDIAN_ENABLE_HTTPD'} = 'on';
-$settings{'GUARDIAN_BLOCKINTERFACES'} ='default';
+$settings{'GUARDIAN_LOGLEVEL'} = 'info';
+$settings{'GUARDIAN_BLOCKCOUNT'} = '3';
 $settings{'GUARDIAN_BLOCKTIME'} = '86400';
 $settings{'GUARDIAN_LOGFILE'} = '/var/log/guardian/guardian.log';
 $settings{'GUARDIAN_SNORT_ALERTFILE'} = '/var/log/snort/alert';
@@ -71,32 +71,29 @@ my $errormessage = '';
 
 # Get GUI values.
 &Header::getcgihash(\%settings);
-&Header::getcgihash(\%cgiparams);
 
 ## Perform input checks and save settings.
 #
 if ($settings{'ACTION'} eq $Lang::tr{'save'}) {
-
 	# Check for valid blocktime.
-	if ($settings{'GUARDIAN_BLOCKTIME'} ne '') {
-		if (($settings{'GUARDIAN_BLOCKTIME'} !~ /^[0-9]+$/) || ($settings{'GUARDIAN_BLOCKTIME'} le '0')) {
+	if (! $settings{'GUARDIAN_BLOCKTIME'} =~ /^\d+$/) {
 			$errormessage = "$Lang::tr{'guardian invalid blocktime'}";
-		}
+	}
+
+	# Check if the bloccount is valid.
+	if (! $settings{'GUARDIAN_BLOCKCOUNT'} =~ /^\d+$/) {
+			$errormessage = "$Lang::tr{'guardian invalid blockcount'}";
 	}
 
 	# Check Logfile.
-	if ($settings{'GUARDIAN_LOGFILE'} ne '') {
-		if ($settings{'GUARDIAN_LOGFILE'} !~ /^[a-zA-Z0-9\.\/]+$/) {
-			$errormessage = "$Lang::tr{'guardian invalid logfile'}";
-		}
+	if (! $settings{'GUARDIAN_LOGFILE'} =~ /^[a-zA-Z0-9\.\/]+$/) {
+		$errormessage = "$Lang::tr{'guardian invalid logfile'}";
 	}
 
 	# Check input for snort alert file.
-        if ($settings{'GUARDIAN_SNORT_ALERTFILE'} ne '') {
-                if ($settings{'GUARDIAN_SNORT_ALERTFILE'} !~ /^[a-zA-Z0-9\.\/]+$/) {
-                        $errormessage = "$Lang::tr{'guardian invalid alertfile'}";
-                }
-        }
+	if (! $settings{'GUARDIAN_SNORT_ALERTFILE'} =~ /^[a-zA-Z0-9\.\/]+$/) {
+		$errormessage = "$Lang::tr{'guardian invalid alertfile'}";
+	}
 
 	# Only continue if no error message has been set.
 	if ($errormessage eq '') {
@@ -152,7 +149,7 @@ if ($settings{'ACTION'} eq $Lang::tr{'save'}) {
 	# So this line is missing in the new file and the entry has been deleted.
 	foreach my $line (@current) {
 		$id++;
-		unless ($cgiparams{'ID'} eq $id) {
+		unless ($settings{'ID'} eq $id) {
 			print FILE "$line";
 		}
 	}
@@ -231,6 +228,7 @@ if ( ($memory != 0) && (@pid[0] ne "///") ) {
 # Function to display the status of guardian and allow base configuration.
 sub showMainBox() {
 	my %checked = ();
+	my %selected = ();
 
 	$checked{'GUARDIAN_ENABLED'}{'on'} = '';
 	$checked{'GUARDIAN_ENABLED'}{'off'} = '';
@@ -244,6 +242,8 @@ sub showMainBox() {
 	$checked{'GUARDIAN_ENABLE_HTTPD'}{'off'} = '';
 	$checked{'GUARDIAN_ENABLE_HTTPD'}{'on'} = '';
 	$checked{'GUARDIAN_ENABLE_HTTPD'}{$settings{'GUARDIAN_ENABLE_HTTPD'}} = "checked='checked'";
+
+	$selected{'GUARDIAN_LOGLEVEL'}{$settings{'GUARDIAN_LOGLEVEL'}}= 'selected';
 
 	&Header::openpage($Lang::tr{'guardian configuration'}, 1, '');
 	&Header::openbigbox('100%', 'left', '', $errormessage);
@@ -320,22 +320,37 @@ END
 				<td colspan='2'><br></td>
 			</tr>
 			<tr>
-				<td width='20%' class='base'>Monitor Snort Alerts:</td>
+				<td width='20%' class='base'>$Lang::tr{'guardian watch snort alertfile'}</td>
 				<td align='left'>on <input type='radio' name='GUARDIAN_ENABLE_SNORT' value='on' $checked{'GUARDIAN_ENABLE_SNORT'}{'on'} /> /
 				<input type='radio' name='GUARDIAN_ENABLE_SNORT' value='off' $checked{'GUARDIAN_ENABLE_SNORT'}{'off'} /> off</td>
 			</tr>
 			<tr>
-				<td width='20%' class='base'>Block SSH-Bruteforcing:</td>
+				<td width='20%' class='base'>$Lang::tr{'guardian block ssh brute-force'}</td>
 				<td align='left'>on <input type='radio' name='GUARDIAN_ENABLE_SSH' value='on' $checked{'GUARDIAN_ENABLE_SSH'}{'on'} /> /
 				<input type='radio' name='GUARDIAN_ENABLE_SSH' value='off' $checked{'GUARDIAN_ENABLE_SSH'}{'off'} /> off</td>
 			</tr>
 			<tr>
-				<td width='20%' class='base'>Block WUI-Bruteforcing:</td>
+				<td width='20%' class='base'>$Lang::tr{'guardian block httpd brute-force'}</td>
 				<td align='left'>on <input type='radio' name='GUARDIAN_ENABLE_HTTPD' value='on' $checked{'GUARDIAN_ENABLE_HTTPD'}{'on'} /> /
 				<input type='radio' name='GUARDIAN_ENABLE_HTTPD' value='off' $checked{'GUARDIAN_ENABLE_HTTPD'}{'off'} /> off</td>
 			</tr>
 			<tr>
 				<td colspan='2'><br></td>
+			</tr>
+			<tr>
+				<td align='left' width='20%'>$Lang::tr{'guardian loglevel'}:</td>
+				<td><select name='GUARDIAN_LOGLEVEL'>
+					<option value='off' $selected{'GUARDIAN_LOGLEVEL'}{'off'}>off</option>
+					<option value='info' $selected{'GUARDIAN_LOGLEVEL'}{'info'}>info</option>
+					<option value='debug' $selected{'GUARDIAN_LOGLEVEL'}{'debug'}>debug</option>
+				</select></td>
+			</tr>
+			<tr>
+				<td colspan='2'><br></td>
+			</tr>
+			<tr>
+				<td width='20%' class='base'>$Lang::tr{'guardian blockcount'}:</td>
+				<td><input type='text' name='GUARDIAN_BLOCKCOUNT' value='$settings{'GUARDIAN_BLOCKCOUNT'}' size='5' /></td>
 			</tr>
 			<tr>
 				<td width='20%' class='base'>$Lang::tr{'guardian blocktime'}:</td>
@@ -404,7 +419,7 @@ END
 					<tr>
 						<td width='80%' class='base' $col>$ignored_element</td>
 						<td width='20%' align='center' $col>
-							<form method='post' name='frma$id' action='$ENV{'SCRIPT_NAME'}'>
+							<form method='post' name='$id' action='$ENV{'SCRIPT_NAME'}'>
 								<input type='image' name='$Lang::tr{'remove'}' src='/images/delete.gif' title='$Lang::tr{'remove'}' alt='$Lang::tr{'remove'}'>
 								<input type='hidden' name='ID' value='$id'>
 								<input type='hidden' name='ACTION' value='$Lang::tr{'remove'}'>
@@ -595,6 +610,8 @@ sub BuildConfiguration() {
 	print FILE "EnableSnortMonitoring	$settings{'GUARDIAN_ENABLE_SNORT'}\n";
 	print FILE "EnableSSHMonitoring		$settings{'GUARDIAN_ENABLE_SSH'}\n";
 	print FILE "EnableHTTPDMonitoring	$settings{'GUARDIAN_ENABLE_HTTPD'}\n";
+	print FILE "LogLevel			$settings{'GUARDIAN_LOGLEVEL'}\n";
+	print FILE "BlockCount			$settings{'GUARDIAN_BLOCKCOUNT'}\n";
 	print FILE "HostGatewayByte		$HostGatewayByte\n";
 	print FILE "LogFile			$settings{'GUARDIAN_LOGFILE'}\n";
 	print FILE "AlertFile			$settings{'GUARDIAN_SNORT_ALERTFILE'}\n";
