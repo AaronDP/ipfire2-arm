@@ -95,7 +95,7 @@ my %fileposition = ();
 &getopts ("hc:d", \%options);
 if (defined($options{"h"})) {
 	print "Guardian v2.0 \n";
-	print "guardian.pl [-hd] <-c config>\n";
+	print "guardian [-hd] <-c config>\n";
 	print " -h  shows help\n";
 	print " -d  run in debug mode (doesn't fork, output goes to STDOUT)\n";
 	print " -c  specifiy a configuration file other than the default (/etc/guardian/guardian.conf)\n";

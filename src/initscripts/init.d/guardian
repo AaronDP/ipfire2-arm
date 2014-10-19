@@ -26,18 +26,18 @@ case "$1" in
 			guardian_is_enabled || exit 0
 
 			boot_mesg "Starting Guardian..."
-			loadproc /usr/local/bin/guardian.pl
+			loadproc /usr/bin/guardian
 	;;
 
 	stop)
-		if ([ ! -z $(pidofproc /usr/local/bin/guardian.pl) ]); then
+		if ([ ! -z $(pidofproc /usr/bin/guardian) ]); then
 			boot_mesg "Stopping Guardian..."
-			killproc /usr/local/bin/guardian.pl
+			killproc /usr/bin/guardian
 		fi
 	;;
 
         status)
-		statusproc /usr/local/bin/guardian.pl
+		statusproc /usr/bin/guardian
 	;;
                 
 	restart)

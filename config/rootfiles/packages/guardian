@@ -1,13 +1,12 @@
 etc/rc.d/rc0.d/K76guardian
 etc/rc.d/rc3.d/S45guardian
 etc/rc.d/rc6.d/K76guardian
-usr/local/bin/guardian.pl
+usr/bin/guardian
 usr/local/bin/guardianctrl
 var/ipfire/backup/addons/includes/guardian
 #var/ipfire/guardian
 var/ipfire/guardian/guardian.conf
 var/ipfire/guardian/guardian.ignore
-var/ipfire/guardian/guardian.target
 var/ipfire/guardian/settings
 #var/log/guardian
 var/log/guardian/guardian.log

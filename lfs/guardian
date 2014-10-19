@@ -61,7 +61,6 @@ $(TARGET) : $(patsubst %,$(DIR_DL)/%,$(objects))
 	# Create config directory and create files.
 	-mkdir -p /var/ipfire/guardian
 	touch /var/ipfire/guardian/guardian.ignore
-	touch /var/ipfire/guardian/guardian.target
 	touch /var/ipfire/guardian/settings
 
 	# Create directory and file for logging.
@@ -72,11 +71,11 @@ $(TARGET) : $(patsubst %,$(DIR_DL)/%,$(objects))
 	install -v -m 644 $(DIR_SRC)/config/guardian/guardian.conf /var/ipfire/guardian/
 
 	# Install guardian.
-	install -v -m 755 $(DIR_SRC)/config/guardian/guardian.pl /usr/local/bin/
+	install -v -m 755 $(DIR_SRC)/config/guardian/guardian /usr/bin/
 
 	# Fix permissions to allow the webinterface to read and write the files.
 	chown nobody.nobody /var/ipfire/guardian
-	chown nobody.nobody /var/ipfire/guardian/{guardian.conf,guardian.ignore,guardian.target}
+	chown nobody.nobody /var/ipfire/guardian/{guardian.conf,guardian.ignore}
 
 	# Create symlinks for runlevel interaction.
 	ln -s /etc/rc.d/init.d/guardian /etc/rc.d/rc3.d/S45guardian
