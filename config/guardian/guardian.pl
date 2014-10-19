@@ -34,6 +34,7 @@ require "${General::swroot}/network-functions.pl";
 
 # Used variables and default values..
 my $configfile = "$General::swroot/guardian/guardian.conf";
+my $blockcount;
 my $ignorefile;
 my $loglevel;
 my $logfile;
@@ -339,7 +340,7 @@ sub checkaction {
 	my ($source, $message) = @_;
 
 	# Do nothing if the source allready has been blocked.
-	return 0 if ($addresshash{$source} > 4);
+	return 0 if ($addresshash{$source} >= $blockcount);
 
 	# Check if the source address equals the hosts ip address.
 	# This will prevent us from nuking ourselves.
@@ -372,8 +373,21 @@ sub checkaction {
 		}
 	}
 
-	# Check if the "source" reached our blocking count (4).
-	if ( $addresshash{$source} == 4 ) {
+	# Start counting for new source addresses.
+	if ($addresshash{$source} eq "") {
+		# Set addresshash to "1".
+		$addresshash{$source} = 1;
+
+		&logger("debug", "Start counting for $source\n");
+		return 0;
+	} else {
+		# Increase counting of existing addresses.
+		$addresshash{$source} = $addresshash{$source}+1;
+		&logger("debug", "Source $source current count $addresshash{$source}.\n");
+	}
+
+	# Check if the "source" reached our blocking count (default 3).
+	if ( $addresshash{$source} eq $blockcount ) {
 		# Write out log message.
 		&logger("info", "Blocking $source: $message\n");
 
@@ -383,18 +397,6 @@ sub checkaction {
 		# Update the addresshash.
 		$addresshash{$source} = $addresshash{$source}+1;
 		return 0;
-	}
-	# Start counting for new source addresses.
-	elsif ($addresshash{$source} eq "") {
-		# Set addresshash to "1".
-		$addresshash{$source} = 1;
-
-		&logger("debug", "Start counting for $source\n");
-		return 0;
-	} else {
-		# Increase counting of existing addresses.
-		$addresshash{$source} = $addresshash{$source}+1;
-		&logger("debug", "Source $source count $addresshash{$source} - No action done yet.\n");
 	}
 }
 
@@ -537,6 +539,11 @@ sub load_conf {
 			$TimeLimit = $1;
 		}
 
+		# Omit BlockCount, when a host shoult be blocked.
+		if (/BlockCount\s+(.*)/) {
+			$blockcount = $1;
+		}
+
 		# HostGatewayByte for automatically adding the gateway to
 		# the ignore hash.
 		if (/HostGatewayByte\s+(.*)/) {
@@ -583,6 +590,12 @@ sub load_conf {
 		print "Warning! Logfile is not writeable! Engaging debug mode, output to STDOUT\n";
 		$loglevel = "debug";
 		$options{"d"} = 1;
+	}
+
+	# Check if the BlockCount is a valid number.
+	if (! $blockcount =~ /^\d+$/) {
+		&logger("debug", "Got no or invalid BlockCount from config file. Using default one (5).\n");
+		$blockcount = "3";
 	}
 
 	# Check if guardianctrl is available.
