@@ -599,17 +599,17 @@ sub generate_monitored_files {
 	my @files = ();
 
 	# Add snort alert file if enabled.
-	if ($enable_snort eq "true" or $enable_snort eq "yes") {
+	if ($enable_snort eq "true" or $enable_snort eq "on") {
 		push(@files, $alert_file);
 	}
 
 	# Add syslogfile for SSH monitoring if enabled.
-	if ($enable_ssh eq "true" or $enable_ssh eq "yes") {
+	if ($enable_ssh eq "true" or $enable_ssh eq "on") {
 		push(@files, $syslogfile);
 	}
 
 	# Add httpd logfile if the monitoring should be enabled.
-	if ($enable_httpd eq "true" or $enable_httpd eq "yes") {
+	if ($enable_httpd eq "true" or $enable_httpd eq "on") {
 		push(@files, $httpdlog_file);
 	}
 
