@@ -43,6 +43,8 @@ my $TimeLimit = "86400";
 my $hostgatewaybyte = "1";
 
 our $watcher;
+# Pidfile to store the process-id of the running daemon.
+my $pidfile = "/run/guardian.pid";
 
 # Path to guardianctrl.
 my $guardianctrl = "/usr/local/bin/guardianctrl";
@@ -691,6 +693,15 @@ sub daemonize {
 	elsif ($pid) {
 		exit 0;
 	}
+
+	# Create pidfile.
+	open(PIDFILE, ">$pidfile") or die "Could not write pidfile. $!\n";
+
+	# Write process-id to the pidfile.
+	print PIDFILE "$$";
+
+	# Close pidfile.
+	close(PIDFILE);
 }
 
 #
@@ -792,6 +803,9 @@ sub clean_up_and_exit {
 		&logger("debug", "Removing $address for shutdown\n");
 		&call_unblock ($address);
 	}
+	# Delete pidfile.
+	unlink $pidfile;
+
 	exit;
 }
 
