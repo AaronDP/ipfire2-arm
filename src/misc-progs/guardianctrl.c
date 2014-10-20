@@ -5,6 +5,8 @@
  *
  */
 
+#include <errno.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -16,6 +18,7 @@
 #include "netutil.h"
 
 const char *chain = "GUARDIAN";
+const char *pidfile = "/run/guardian.pid";
 
 int main(int argc, char *argv[]) {
 	char cmd[STRING_SIZE];
@@ -24,7 +27,7 @@ int main(int argc, char *argv[]) {
                 exit(1);
 
         if (argc < 2) {
-                fprintf(stderr, "\nNo argument given.\n\nguardianctrl (start|stop|restart|get-chain|flush-chain|block|unblock)\n\n");
+                fprintf(stderr, "\nNo argument given.\n\nguardianctrl (start|stop|restart|reload|get-chain|flush-chain|block|unblock)\n\n");
                 exit(1);
         }
 	if (strcmp(argv[1], "start") == 0) {
@@ -35,6 +38,9 @@ int main(int argc, char *argv[]) {
 
 	} else if (strcmp(argv[1], "restart") == 0) {
 		safe_system("/etc/rc.d/init.d/guardian restart");
+
+	} else if (strcmp(argv[1], "reload") == 0) {
+		reloadDaemon();
 
 	} else if (strcmp(argv[1], "get-chain") == 0) {
 		snprintf(cmd, sizeof(cmd), "/sbin/iptables -n -v -L %s", chain);
@@ -73,9 +79,43 @@ int main(int argc, char *argv[]) {
 			exit(1);
 		}
         } else {
-                fprintf(stderr, "\nBad argument given.\n\nguardianctrl (start|stop|restart|get-chain|flush-chain|block|unblock)\n\n");
+                fprintf(stderr, "\nBad argument given.\n\nguardianctrl (start|stop|restart|reload|get-chain|flush-chain|block|unblock)\n\n");
                 exit(1);
         }
 
         return 0;
+}
+
+/* Function to perfom a reload of guardian, by sending a SIGHUP signal to the process.
+ * The process id directly will be read from the defined pidfile. */
+void reloadDaemon(void) {
+	FILE *file = NULL;
+
+	// Open the pidfile.
+	file = fopen(pidfile, "r");
+
+	// Exit if the file could not opened.
+	if (file == NULL) {
+		fprintf(stderr, "Could not open %s for reading.\n", pidfile);
+		exit(1);
+	}
+
+	int pid = 0;
+
+	// Read the process id from the file.
+	if(fscanf(file, "%d", &pid) <= 0) {
+		fprintf(stderr, "Invalid data from pidfile (%s).\n", pidfile);
+		exit(1);
+	}
+
+	// Close the pidfile.
+	fclose(file);
+
+	// Send a SIGHUP to the process.
+	if(kill(pid, SIGHUP) != 0) {
+		fprintf(stderr, "Could not execute kill(): %s\n", strerror(errno));
+		exit(1);
+	}
+
+	return 0;
 }
