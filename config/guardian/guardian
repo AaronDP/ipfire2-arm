@@ -38,6 +38,7 @@ my $blockcount;
 my $ignorefile;
 my $loglevel;
 my $logfile;
+my $priority;
 
 my $TimeLimit = "86400";
 my $hostgatewaybyte = "1";
@@ -259,6 +260,13 @@ sub handle_snort (@) {
 
 	# Loop through the given array and parse the lines.
 	foreach my $line (@alert) {
+		# Check Priority Level and skip alert if it is to low.
+		if ($line =~ /.*\[Priority: (\d+)\].*/) {
+			last if ($1 > $priority);
+			&logger("debug", "Skip snort alert because alert priority ($1)
+				is lower than the configured minimum ($priority).\n");
+		}
+
 		# Look for a line like xxx.xxx.xxx.xxx:xxx -> xxx.xxx.xxx.xxx:xxx
 		if ($line =~ /(\d+\.\d+\.\d+\.\d+):\d+ -\> (\d+\.\d+\.\d+\.\d+):\d+/) {
 			&checkaction ($1, "An active snort rule has matched and gained an alert.");
@@ -279,12 +287,12 @@ sub handle_httpd ($) {
 
 	# This should catch Bruteforce Attacks on the WUI
 	if ($message =~ /.*\[error\] \[client (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\] user(.*) not found:.*/) {
-		&checkaction ($1, "Possible WUI-Bruteforce Attack, wrong user" .$2);
+		&checkaction ($1, "Possible WUI-Bruteforce Attack, wrong user" . $2);
 	}
 
 	# Detect Password brute-forcing.
 	elsif ($message =~ /.*\[error\] \[client (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\] user(.*): authentication failure for.*/) {
-		&checkaction ($1, "Possible WUI-Bruteforce Attack, wrong password for user" .$2);
+		&checkaction ($1, "Possible WUI-Bruteforce Attack, wrong password for user" . $2);
 	}
 }
 
@@ -384,12 +392,12 @@ sub checkaction {
 		return 0;
 	} else {
 		# Increase counting of existing addresses.
-		$addresshash{$source} = $addresshash{$source}+1;
+		$addresshash{$source} = $addresshash{$source} + 1;
 		&logger("debug", "Source $source current count $addresshash{$source}.\n");
 	}
 
 	# Check if the "source" reached our blocking count (default 3).
-	if ( $addresshash{$source} eq $blockcount ) {
+	if ($addresshash{$source} eq $blockcount ) {
 		# Write out log message.
 		&logger("info", "Blocking $source: $message\n");
 
@@ -397,7 +405,7 @@ sub checkaction {
 		&call_block($source);
 
 		# Update the addresshash.
-		$addresshash{$source} = $addresshash{$source}+1;
+		$addresshash{$source} = $addresshash{$source} + 1;
 		return 0;
 	}
 }
@@ -406,12 +414,12 @@ sub checkaction {
 ## Function to generate the ignore hash.
 #
 sub build_ignore_hash {
-	my $count =0;
+	my $count = 0;
 	my @subnets;
 
 	# Add our gatewayaddress and hostipaddr to the ignore hash.
-	$ignorehash{$gatewayaddr}=1;
-	$ignorehash{$hostipaddr}=1;
+	$ignorehash{$gatewayaddr} = 1;
+	$ignorehash{$hostipaddr} = 1;
 
 	# Read-in the file if an ignorefile has been provided.
 	if ($ignorefile ne "") {
@@ -429,7 +437,7 @@ sub build_ignore_hash {
 			# Check if we got a valid single address.
 			if (&Network::check_ip_address($_)) {
 				# Add single address to the ignore hash.
-				$ignorehash{$_}=1;
+				$ignorehash{$_} = 1;
 			}
 			# Check if the input contains a valid address and mask.
 			elsif (&Network::check_network($_)) {
@@ -521,6 +529,11 @@ sub load_conf {
 			$logfile = $1;
 		}
 
+		# Minimum priority level for snort alerts.
+		if (/PriorityLevel\s+(.*)/) {
+			$priority = $1;
+		}
+
 		# Get path to snort alert file.
 		if (/AlertFile\s+(.*)/) {
 			$alert_file = $1;
@@ -600,6 +613,12 @@ sub load_conf {
 		$blockcount = "3";
 	}
 
+	# Check if PriorityLevel for Snort Alerts has been given.
+	if (! $priority =~ /^\d+$/) {
+		&logger("debug", "Got no or an invalid PriorityLevel. Using the default one (3).\n");
+		$priority = 3;
+	}
+
 	# Check if guardianctrl is available.
 	if (! -e $guardianctrl) {
 		print "Error! Could not find $guardianctrl. Exiting. \n";
@@ -668,7 +687,7 @@ sub logger {
 			open (LOG, ">>$logfile") or die "Could not open $logfile for writing. $!\n";
 
 			# Append message.
-			print LOG $date.": ".$message;
+			print LOG $date . ": " . $message;
 
 			# Close the file afterwards.
 			close (LOG);
@@ -834,7 +853,7 @@ sub get_aliases {
 			# Check if the address is valid.
 			if (&Network::check_ip_address($ip)) {
 				&logger("debug", "Got $ip on $interface ...\n");
-				$ignorehash{"ip"}=1;
+				$ignorehash{"ip"} = 1;
 			}
 		}
 	}
