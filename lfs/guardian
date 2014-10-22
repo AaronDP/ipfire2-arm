@@ -83,6 +83,12 @@ $(TARGET) : $(patsubst %,$(DIR_DL)/%,$(objects))
 	ln -s /etc/rc.d/init.d/guardian /etc/rc.d/rc6.d/K76guardian
 
 	# Install include file for backup.
-	install -v -m 644 $(DIR_SRC)/config/backup/includes/guardian /var/ipfire/backup/addons/includes/guardian
+	install -v -m 644 $(DIR_SRC)/config/backup/includes/guardian \
+		/var/ipfire/backup/addons/includes/guardian
+
+	# Logrotate.
+	mkdir -pv /etc/logrotate.d
+	install -v -m 644 $(DIR_SRC)/config/guardian/guardian.logrotate \
+		/etc/logrotate.d/guardian
 
 	@$(POSTBUILD)
