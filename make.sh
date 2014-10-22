@@ -814,6 +814,8 @@ buildipfire() {
   ipfiremake batctl
   ipfiremake perl-PDF-API2
   ipfiremake squid-accounting
+  ipfiremake perl-common-sense
+  ipfiremake perl-inotify2
 }
 
 buildinstaller() {
