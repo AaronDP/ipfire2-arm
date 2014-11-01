@@ -262,7 +262,7 @@ sub handle_snort (@) {
 	foreach my $line (@alert) {
 		# Check Priority Level and skip alert if it is to low.
 		if ($line =~ /.*\[Priority: (\d+)\].*/) {
-			last if ($1 > $priority);
+			next unless($1 < $priority);
 			&logger("debug", "Skip snort alert because alert priority ($1)
 				is lower than the configured minimum ($priority).\n");
 		}
