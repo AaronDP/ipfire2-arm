@@ -60,6 +60,13 @@ my $syslogfile = "/var/log/messages";
 my $alert_file = "/var/log/snort.alert";
 my $httpdlog_file = "/var/log/httpd/error_log";
 
+# Variable to store if the red interface is active and in use.
+my $red_active;
+
+# Variables to store IP information of the red device.
+my $hostipaddr;
+my $gatewayaddr;
+
 # Files for red and gateway addresses.
 my $redaddress_file = "/var/ipfire/red/local-ipaddress";
 my $gatewayaddress_file = "/var/ipfire/red/remote-ipaddress";
@@ -114,18 +121,19 @@ if (defined($options{"h"})) {
 # Setup signal handler.
 &sig_handler_setup;
 
-# Get host address.
-my $hostipaddr = &get_address("$redaddress_file");
+# Check if the red interface is active.
+if (-e "/var/ipfire/red/active") {
+	# Get host address.
+	$hostipaddr = &get_address("$redaddress_file");
 
-# Check if we got an address, otherwise we have to cancel here.
-if (! $hostipaddr) {
-	die "Invalid $hostipaddr. Cannot go further!\n";
+	&logger("debug", "My host IP-address is: $hostipaddr\n");
+
+	# Get gateway address.
+	$gatewayaddr = &get_address("$gatewayaddress_file");
+	&logger("debug", "My gatewayaddess is: $gatewayaddr\n");
+} else {
+	&logger("debug", "RED interface not active.\n");
 }
-&logger("debug", "My host IP-address is: $hostipaddr\n");
-
-# Get gateway address.
-my $gatewayaddr = &get_address("$gatewayaddress_file");
-&logger("debug", "My gatewayaddess is: $gatewayaddr\n");
 
 # Generate hash for ignored hosts or networks.
 &build_ignore_hash;
@@ -417,9 +425,12 @@ sub build_ignore_hash {
 	my $count = 0;
 	my @subnets;
 
-	# Add our gatewayaddress and hostipaddr to the ignore hash.
-	$ignorehash{$gatewayaddr} = 1;
-	$ignorehash{$hostipaddr} = 1;
+	# Add our gatewayaddress and hostipaddr to the ignore hash
+	# if the red interface is in use.
+	if ($red_active) {
+		$ignorehash{$gatewayaddr} = 1;
+		$ignorehash{$hostipaddr} = 1;
+	}
 
 	# Read-in the file if an ignorefile has been provided.
 	if ($ignorefile ne "") {
@@ -834,6 +845,11 @@ sub clean_up_and_exit {
 #
 sub get_aliases {
 	my $ip;
+
+	# Skip if the red interface is not active.
+	unless($red_active) {
+		return 0;
+	}
 
 	# Get name of the red interface.
 	my $interface = &General::get_red_interface;
