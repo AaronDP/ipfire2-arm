@@ -517,7 +517,7 @@ sub load_conf {
 		next if (/^\s*$/);
 
 		# Skip comments.
-		next if (/^#/);
+		next if (/\#/);
 
 		# Get loglevel.
 		if (/LogLevel\s+(.*)/) {
@@ -589,7 +589,7 @@ sub load_conf {
 	}
 
 	# Check if a valid LogLevel has been given or use default one (info).
-	if(!$loglevels{$loglevel}) {
+	unless($loglevels{$loglevel}) {
 		$loglevel = "info";
 	}
 
@@ -601,26 +601,26 @@ sub load_conf {
 	}
 
 	# Check if our logfile is writeable.
-	if (! -w $logfile) {
+	unless(-w $logfile) {
 		print "Warning! Logfile is not writeable! Engaging debug mode, output to STDOUT\n";
 		$loglevel = "debug";
 		$options{"d"} = 1;
 	}
 
 	# Check if the BlockCount is a valid number.
-	if (! $blockcount =~ /^\d+$/) {
+	unless($blockcount =~ /^\d+$/) {
 		&logger("debug", "Got no or invalid BlockCount from config file. Using default one (5).\n");
 		$blockcount = "3";
 	}
 
 	# Check if PriorityLevel for Snort Alerts has been given.
-	if (! $priority =~ /^\d+$/) {
+	unless($priority =~ /^\d+$/) {
 		&logger("debug", "Got no or an invalid PriorityLevel. Using the default one (3).\n");
 		$priority = 3;
 	}
 
 	# Check if guardianctrl is available.
-	if (! -e $guardianctrl) {
+	unless(-e $guardianctrl) {
 		print "Error! Could not find $guardianctrl. Exiting. \n";
 		exit;
 	}
