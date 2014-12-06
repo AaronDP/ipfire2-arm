@@ -79,6 +79,7 @@ case "$1" in
 			sleep 1
                         chmod 644 /var/run/snort_$DEVICE.pid
                 done
+		;;
         stop)
                DEVICES=""
                if [ -r /var/run/snort_$BLUE_DEV.pid ]; then
