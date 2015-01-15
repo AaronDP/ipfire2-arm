@@ -144,6 +144,22 @@ sub check_netmask($) {
 
 	return (exists $NETMASK2PREFIX{$netmask});
 }
+# Returns True for all valid inputs like a.b.c.d/a.b.c.d
+# or a.b.c.d/a.
+sub check_network($$) {
+	my $network = shift;
+
+	my ($address, $netmask) = split(/\//, $network, 2);
+
+	# Check for a valid IP address.
+	my $result = &check_ip_address($address);
+	unless ($result) {
+		return $result;
+	}
+
+	# Check if we got a valid netmask or prefix.
+	return &check_netmask($netmask) || &check_prefix($netmask);
+}
 
 # Returns True for all valid inputs like a.b.c.d/a.b.c.d.
 sub check_ip_address_and_netmask($$) {
