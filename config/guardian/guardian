@@ -641,6 +641,7 @@ sub load_conf {
 ## Function to generate the array for files to monitor.
 #
 sub generate_monitored_files {
+	my @monitored = ();
 	my @files = ();
 
 	# Add snort alert file if enabled.
@@ -658,8 +659,20 @@ sub generate_monitored_files {
 		push(@files, $httpdlog_file);
 	}
 
-	# Return our array.
-	return @files
+	# Check for and drop non existing files.
+	foreach my $file (@files) {
+		# Check if given file exist.
+		if ( -e "$file" ) {
+			# Add file to final array.
+			push(@monitored, $file);
+		} else {
+			# Print out log message.
+			&logger("info", "Ignoring non exising file ($file).\n");
+		}
+	}
+
+	# Return our final array.
+	return @monitored;
 }
 
 #
