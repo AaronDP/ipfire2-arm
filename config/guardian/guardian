@@ -54,11 +54,13 @@ my $guardianctrl = "/usr/local/bin/guardianctrl";
 my $enable_snort = "true";
 my $enable_ssh = "true";
 my $enable_httpd = "true";
+my $enable_owncloud = "false";
 
 # Watched files.
 my $syslogfile = "/var/log/messages";
 my $alert_file = "/var/log/snort.alert";
 my $httpdlog_file = "/var/log/httpd/error_log";
+my $owncloudlog_file = "/var/owncloud/data/owncloud.log";
 
 # Variable to store if the red interface is active and in use.
 my $red_active;
@@ -230,6 +232,9 @@ while () {
 		elsif ("$changed_file" eq "$httpdlog_file") {
 			&handle_httpd("$message");
 		}
+		elsif ("$changed_file" eq "$owncloudlog_file") {
+			&handle_owncloud("$message");
+		}
 
 		# Drop processed event from queue.
 		$queue->dequeue();
@@ -301,6 +306,18 @@ sub handle_httpd ($) {
 	# Detect Password brute-forcing.
 	elsif ($message =~ /.*\[error\] \[client (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\] user(.*): authentication failure for.*/) {
 		&checkaction ($1, "Possible WUI-Bruteforce Attack, wrong password for user" . $2);
+	}
+}
+
+#
+### Function to detect Owncloud Login-Bruteforce Attacks.
+#
+sub handle_owncloud ($) {
+	my $message = @_[0];
+
+	# Check for failed login attempts.
+	if ($message =~/.*\"Login failed:.* \(Remote IP: \'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\'.*/) {
+		&checkaction ($1, "Possible Owncloud-Bruteforce Attack.");
 	}
 }
 
@@ -555,6 +572,11 @@ sub load_conf {
 			$httpdlog_file = $1;
 		}
 
+		# Get path to owncloud logfile.
+		if (/OwncloudLogFile\s+(.*)/) {
+			$owncloudlog_file = $1;
+		}
+
 		# Read-in path to the ignorefile.
 		if (/IgnoreFile\s+(.*)/) {
 			$ignorefile = $1;
@@ -589,6 +611,10 @@ sub load_conf {
 		# HTTPD (WUI) - Brute force attempts.
 		if (/EnableHTTPDMonitoring\s+(.*)/) {
 			$enable_httpd = $1;
+		}
+		# Owncloud - Brute force attacks.
+		if (/EnableOwncloudMonitoring\s+(.*)/) {
+			$enable_owncloud = $1;
 		}
 	}
 
@@ -657,6 +683,11 @@ sub generate_monitored_files {
 	# Add httpd logfile if the monitoring should be enabled.
 	if ($enable_httpd eq "true" or $enable_httpd eq "on") {
 		push(@files, $httpdlog_file);
+	}
+
+	# Add owncloud logfile if the monitoring should be enabled.
+	if ($enable_owncloud eq "true" or $enable_owncloud eq "on") {
+		push(@files, $owncloudlog_file);
 	}
 
 	# Check for and drop non existing files.
