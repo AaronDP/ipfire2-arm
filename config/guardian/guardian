@@ -205,7 +205,7 @@ while () {
 		# Logfiles with a single line are pretty easy to handle.
 		} else {
 			# Get log message.
-			my $message = <FILE>;
+			$message = <FILE>;
 
 			# Remove newline.
 			chomp $message,
@@ -247,7 +247,7 @@ while () {
 ## Function to detect SSH-Bruteforce Attacks.
 #
 sub handle_ssh ($) {
-	my $message = $_[0];
+	my $message = @_[0];
 
 	# Check for failed password attempts.
 	if ($message =~/.*sshd.*Failed password for .* from (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).*/) {
@@ -291,7 +291,7 @@ sub handle_snort (@) {
 ## Function to detect HTTPD Login-Bruteforce attempts.
 #
 sub handle_httpd ($) {
-	my $message = $_[0];
+	my $message = @_[0];
 
 	# This should catch Bruteforce Attacks on the WUI
 	if ($message =~ /.*\[error\] \[client (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\] user(.*) not found:.*/) {
