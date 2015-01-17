@@ -374,8 +374,12 @@ sub init_fileposition {
 sub checkaction {
 	my ($source, $message) = @_;
 
-	# Do nothing if the source allready has been blocked.
-	return 0 if ($addresshash{$source} >= $blockcount);
+	# Call block subfunction again if we got a higher count than the
+	# configured blockcount.
+	if ($addresshash{$source} >= $blockcount) {
+		&call_block($source);
+		return 0;
+	}
 
 	# Check if the source address equals the hosts ip address.
 	# This will prevent us from nuking ourselves.
@@ -848,6 +852,19 @@ sub call_block ($) {
 
 	# Check if the address currently is not blocked.
 	if ($blockhash{"$address"} eq "") {
+		# Call guardianctrl to block the address.
+		system("$guardianctrl block $address");
+	}
+
+	# Reblock an address if it already has been blocked,
+	# but we recieve another block call. (This could
+	# be happen when an address get unblocked by another
+	# process or manually by the user. )
+	elsif (exists $blockhash{"$address"}) {
+		# Try to unblock the address to prevent from
+		# doubble entries in iptables chain.
+		system("$guardianctrl unblock $address");
+
 		# Call guardianctrl to block the address.
 		system("$guardianctrl block $address");
 	}
