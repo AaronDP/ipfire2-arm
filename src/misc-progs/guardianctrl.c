@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
 				exit(1);
 			}
 
-			snprintf(cmd, sizeof(cmd), "/sbin/iptables -I %s -s %s -j DROP", chain, ipaddress);
+			snprintf(cmd, sizeof(cmd), "/sbin/iptables -I %s -s %s -j DROP >/dev/null 2>&1", chain, ipaddress);
 			safe_system(cmd);
 		} else {
 			fprintf(stderr, "\nTo few arguments. \n\nUSAGE: guardianctrl block <address>\n\n");
@@ -72,8 +72,21 @@ int main(int argc, char *argv[]) {
 				exit(1);
 			}
 
-			snprintf(cmd, sizeof(cmd), "/sbin/iptables -D %s -s %s -j DROP", chain, ipaddress);
-			safe_system(cmd);
+			snprintf(cmd, sizeof(cmd), "/sbin/iptables -D %s -s %s -j DROP >/dev/null 2>&1", chain, ipaddress);
+
+			// Loop to be sure that all entries for an address will be dropped from chain
+			// Loop limit: 10 rounds
+			int limit;
+
+			limit = 0;
+			while(limit++ < 10) {
+				int retval = safe_system(cmd);
+
+				// Leave loop if we got a different return code than "0"
+				if (retval > 0) {
+					break;
+				}
+			}
 		} else {
 			fprintf(stderr, "\nTo few arguments. \n\nUSAGE: guardianctrl unblock <address>\n\n");
 			exit(1);
