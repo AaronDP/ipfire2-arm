@@ -43,11 +43,11 @@ int main(int argc, char *argv[]) {
 		reloadDaemon();
 
 	} else if (strcmp(argv[1], "get-chain") == 0) {
-		snprintf(cmd, sizeof(cmd), "/sbin/iptables -n -v -L %s", chain);
+		snprintf(cmd, sizeof(cmd), "/sbin/iptables --wait -n -v -L %s", chain);
                 safe_system(cmd);
 
         } else if (strcmp(argv[1], "flush-chain") == 0) {
-		snprintf(cmd, sizeof(cmd), "/sbin/iptables -F %s", chain);
+		snprintf(cmd, sizeof(cmd), "/sbin/iptables --wait -F %s", chain);
                 safe_system(cmd);
 
         } else if (strcmp(argv[1], "block") == 0) {
@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
 				exit(1);
 			}
 
-			snprintf(cmd, sizeof(cmd), "/sbin/iptables -I %s -s %s -j DROP >/dev/null 2>&1", chain, ipaddress);
+			snprintf(cmd, sizeof(cmd), "/sbin/iptables --wait -I %s -s %s -j DROP >/dev/null 2>&1", chain, ipaddress);
 			safe_system(cmd);
 		} else {
 			fprintf(stderr, "\nTo few arguments. \n\nUSAGE: guardianctrl block <address>\n\n");
@@ -72,7 +72,7 @@ int main(int argc, char *argv[]) {
 				exit(1);
 			}
 
-			snprintf(cmd, sizeof(cmd), "/sbin/iptables -D %s -s %s -j DROP >/dev/null 2>&1", chain, ipaddress);
+			snprintf(cmd, sizeof(cmd), "/sbin/iptables --wait -D %s -s %s -j DROP >/dev/null 2>&1", chain, ipaddress);
 
 			// Loop to be sure that all entries for an address will be dropped from chain
 			// Loop limit: 10 rounds
