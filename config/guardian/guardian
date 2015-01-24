@@ -446,6 +446,10 @@ sub build_ignore_hash {
 	my $count = 0;
 	my @subnets;
 
+	# Clear ignorehash and netorks array.
+	%ignorehash = ();
+	@ignored_networks = ();
+
 	# Add our gatewayaddress and hostipaddr to the ignore hash
 	# if the red interface is in use.
 	if ($red_active) {
