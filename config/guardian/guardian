@@ -114,6 +114,16 @@ if (defined($options{"h"})) {
 	exit;
 }
 
+# Check if another guardian instance is running.
+if (-e "$pidfile") {
+	print STDERR "Guardian PID file found!\n\n";
+	print STDERR "Please  stop guardian or release the PID file\n";
+	print STDERR "if no other guardian instance is running.\n";
+
+	# Exit with return code "1".
+	exit 1;
+}
+
 # Call function to read in the configuration file.
 &load_conf;
 
