@@ -107,7 +107,7 @@ my %fileposition = ();
 &getopts ("hc:f", \%options);
 if (defined($options{"h"})) {
 	print "Guardian v2.0 \n";
-	print "guardian [-hd] <-c config>\n";
+	print "guardian [-hf] <-c config>\n";
 	print " -h  shows help\n";
 	print " -f  run in the foreground (doesn't fork, output goes to STDOUT)\n";
 	print " -c  specifiy a configuration file other than the default (/etc/guardian/guardian.conf)\n";
@@ -162,9 +162,9 @@ if (-e "/var/ipfire/red/active") {
 # Create queue for processing inotify events.
 my $queue = new Thread::Queue or die "Could not create new, empty queue. $!\n";
 
-# Check if we are running in debug mode or we can deamonize.
+# Check if we can deamonize.
 if (defined($options{"f"})) {
-	&logger("debug", "Running in debug mode...\n");
+	&logger("debug", "Running in the foreground...\n");
 } else {
 	&daemonize;
 }
@@ -639,14 +639,14 @@ sub load_conf {
 
 	# Check if a path for the LogFile has been given.
 	if ($logfile eq "") {
-		print "Warning! LogFile is undefined.. Assuming debug mode, output to STDOUT\n";
+		print "Warning! LogFile is undefined.. Cannot daemonize, output to STDOUT\n";
 		$loglevel = "debug";
 		$options{"f"} = 1;
 	}
 
 	# Check if our logfile is writeable.
 	unless(-w $logfile) {
-		print "Warning! Logfile is not writeable! Engaging debug mode, output to STDOUT\n";
+		print "Warning! Logfile is not writeable! Cannot daemonize, output to STDOUT\n";
 		$loglevel = "debug";
 		$options{"f"} = 1;
 	}
@@ -736,7 +736,7 @@ sub logger {
 
 	# Check if the message should be handled.
 	if ($current_level >= $required_level) {
-		# Check if we are running in debug mode or we should
+		# Check if we are running in the foreground or we should
 		# log to a logfile.
 		if (((defined($options{"f"}))) || ($logfile eq "")) {
 			# Print out to STDOUT.
