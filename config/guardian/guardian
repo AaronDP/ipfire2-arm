@@ -104,12 +104,12 @@ my %ignorehash = ();
 my %fileposition = ();
 
 # Option parser for given arguments from command line.
-&getopts ("hc:d", \%options);
+&getopts ("hc:f", \%options);
 if (defined($options{"h"})) {
 	print "Guardian v2.0 \n";
 	print "guardian [-hd] <-c config>\n";
 	print " -h  shows help\n";
-	print " -d  run in debug mode (doesn't fork, output goes to STDOUT)\n";
+	print " -f  run in the foreground (doesn't fork, output goes to STDOUT)\n";
 	print " -c  specifiy a configuration file other than the default (/etc/guardian/guardian.conf)\n";
 	exit;
 }
@@ -153,7 +153,7 @@ if (-e "/var/ipfire/red/active") {
 my $queue = new Thread::Queue or die "Could not create new, empty queue. $!\n";
 
 # Check if we are running in debug mode or we can deamonize.
-if (defined($options{"d"})) {
+if (defined($options{"f"})) {
 	&logger("debug", "Running in debug mode...\n");
 } else {
 	&daemonize;
@@ -631,14 +631,14 @@ sub load_conf {
 	if ($logfile eq "") {
 		print "Warning! LogFile is undefined.. Assuming debug mode, output to STDOUT\n";
 		$loglevel = "debug";
-		$options{"d"} = 1;
+		$options{"f"} = 1;
 	}
 
 	# Check if our logfile is writeable.
 	unless(-w $logfile) {
 		print "Warning! Logfile is not writeable! Engaging debug mode, output to STDOUT\n";
 		$loglevel = "debug";
-		$options{"d"} = 1;
+		$options{"f"} = 1;
 	}
 
 	# Check if the BlockCount is a valid number.
@@ -728,7 +728,7 @@ sub logger {
 	if ($current_level >= $required_level) {
 		# Check if we are running in debug mode or we should
 		# log to a logfile.
-		if (((defined($options{"d"}))) || ($logfile eq "")) {
+		if (((defined($options{"f"}))) || ($logfile eq "")) {
 			# Print out to STDOUT.
 			print STDOUT $message;
 		} else {
