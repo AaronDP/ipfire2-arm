@@ -1123,4 +1123,16 @@ sub get_red_interface() {
 	return $interface;
 }
 
+# Function to get the current used gateway address.
+sub get_gateway() {
+
+	open(GATEWAY, "${General::swroot}/red/remote-ipaddress") or die "Could not open /var/ipfire/red/remote-ipaddress";
+
+	my $gateway = <GATEWAY>;
+	close(GATEWAY);
+	chomp $gateway;
+
+	return $gateway;
+}
+
 1;

@@ -812,6 +812,8 @@ buildipfire() {
   ipfiremake tmux
   ipfiremake swconfig
   ipfiremake haproxy
+  ipfiremake perl-common-sense
+  ipfiremake perl-inotify2
 }
 
 buildinstaller() {

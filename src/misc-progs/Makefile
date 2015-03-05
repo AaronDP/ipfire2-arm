@@ -31,7 +31,7 @@ SUID_PROGS = squidctrl sshctrl ipfirereboot \
 	redctrl syslogdctrl extrahdctrl sambactrl upnpctrl tripwirectrl \
 	smartctrl clamavctrl addonctrl pakfire mpfirectrl wlanapctrl \
 	setaliases urlfilterctrl updxlratorctrl fireinfoctrl rebuildroutes \
-	getconntracktable wirelessclient dnsmasqctrl torctrl
+	getconntracktable wirelessclient dnsmasqctrl torctrl guardianctrl
 SUID_UPDX = updxsetperms
 
 OBJS = $(patsubst %,%.o,$(PROGS) $(SUID_PROGS))
@@ -53,5 +53,13 @@ clean:
 setuid.o: setuid.c setuid.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
+<<<<<<< HEAD
 $(PROGS) $(SUID_PROGS): setuid.o | $(OBJS)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $@.o $< $(LIBS)
+=======
+torctrl: torctrl.c setuid.o ../install+setup/libsmooth/varval.o
+	$(COMPILE) -I../install+setup/libsmooth/ torctrl.c setuid.o ../install+setup/libsmooth/varval.o -o $@
+
+guardianctrl: guardianctrl.c setuid.o ../install+setup/libsmooth/varval.o
+	$(COMPILE) -I../install+setup/libsmooth/ guardianctrl.c setuid.o ../install+setup/libsmooth/varval.o -o $@
+>>>>>>> guardian-2.0

@@ -1,0 +1,11 @@
+/var/log/guardian/guardian.log {
+    weekly
+    rotate 4
+    copytruncate
+    compress
+    notifempty
+    missingok
+    postrotate
+	/usr/local/bin/guardianctrl reload &>/dev/null || true
+    endscript
+}
