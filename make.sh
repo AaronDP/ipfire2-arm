@@ -25,8 +25,8 @@
 NAME="IPFire"							# Software name
 SNAME="ipfire"							# Short name
 VERSION="2.17"							# Version number
-CORE="94"							# Core Level (Filename)
-PAKFIRE_CORE="94"						# Core Level (PAKFIRE)
+CORE="97"							# Core Level (Filename)
+PAKFIRE_CORE="97"						# Core Level (PAKFIRE)
 GIT_BRANCH=`git rev-parse --abbrev-ref HEAD`			# Git Branch
 SLOGAN="www.ipfire.org"						# Software slogan
 CONFIG_ROOT=/var/ipfire						# Configuration rootdir
@@ -421,8 +421,7 @@ buildipfire() {
   case "${TARGET_ARCH}" in
 	x86_64)
 		ipfiremake linux			KCFG=""
-#		ipfiremake backports			KCFG=""
-		ipfiremake cryptodev			KCFG=""
+		ipfiremake backports			KCFG=""
 		ipfiremake e1000e			KCFG=""
 		ipfiremake igb				KCFG=""
 		ipfiremake ixgbe			KCFG=""
@@ -433,9 +432,8 @@ buildipfire() {
 		# x86-pae (Native and new XEN) kernel build
 		ipfiremake linux			KCFG="-pae"
 		ipfiremake backports			KCFG="-pae"
-		ipfiremake cryptodev			KCFG="-pae"
 		ipfiremake e1000e			KCFG="-pae"
-#		ipfiremake igb				KCFG="-pae"
+		ipfiremake igb				KCFG="-pae"
 		ipfiremake ixgbe			KCFG="-pae"
 		ipfiremake xtables-addons		KCFG="-pae"
 		ipfiremake linux-initrd			KCFG="-pae"
@@ -443,9 +441,8 @@ buildipfire() {
 		# x86 kernel build
 		ipfiremake linux			KCFG=""
 		ipfiremake backports			KCFG=""
-		ipfiremake cryptodev			KCFG=""
 		ipfiremake e1000e			KCFG=""
-#		ipfiremake igb				KCFG=""
+		ipfiremake igb				KCFG=""
 		ipfiremake ixgbe			KCFG=""
 		ipfiremake xtables-addons		KCFG=""
 		ipfiremake linux-initrd			KCFG=""
@@ -455,16 +452,14 @@ buildipfire() {
 		# arm-rpi (Raspberry Pi) kernel build
 		ipfiremake linux			KCFG="-rpi"
 		ipfiremake backports			KCFG="-rpi"
-		ipfiremake cryptodev			KCFG="-rpi"
 		ipfiremake xtables-addons		KCFG="-rpi"
 		ipfiremake linux-initrd			KCFG="-rpi"
 
 		# arm multi platform (Panda, Wandboard ...) kernel build
 		ipfiremake linux			KCFG="-multi"
 		ipfiremake backports			KCFG="-multi"
-		ipfiremake cryptodev			KCFG="-multi"
 		ipfiremake e1000e			KCFG="-multi"
-#		ipfiremake igb				KCFG="-multi"
+		ipfiremake igb				KCFG="-multi"
 		ipfiremake ixgbe			KCFG="-multi"
 		ipfiremake xtables-addons		KCFG="-multi"
 		ipfiremake linux-initrd			KCFG="-multi"
@@ -472,9 +467,8 @@ buildipfire() {
 		# arm-kirkwood (Dreamplug, ICY-Box ...) kernel build
 		ipfiremake linux			KCFG="-kirkwood"
 		ipfiremake backports			KCFG="-kirkwood"
-		ipfiremake cryptodev			KCFG="-kirkwood"
 		ipfiremake e1000e			KCFG="-kirkwood"
-#		ipfiremake igb				KCFG="-kirkwood"
+		ipfiremake igb				KCFG="-kirkwood"
 		ipfiremake ixgbe			KCFG="-kirkwood"
 		ipfiremake xtables-addons		KCFG="-kirkwood"
 		ipfiremake linux-initrd			KCFG="-kirkwood"
@@ -685,7 +679,6 @@ buildipfire() {
   ipfiremake ncftp
   ipfiremake etherwake
   ipfiremake bwm-ng
-  ipfiremake tripwire
   ipfiremake sysstat
   ipfiremake vsftpd
   ipfiremake strongswan
@@ -850,6 +843,7 @@ buildipfire() {
   ipfiremake perl-Text-CSV_XS
   ipfiremake swconfig
   ipfiremake haproxy
+  ipfiremake ipset
 }
 
 buildinstaller() {

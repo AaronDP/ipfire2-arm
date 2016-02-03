@@ -110,9 +110,12 @@ if ($cgiparams{'ACTION'} eq "$Lang::tr{'save'}"){ #SaveButton on configsite
 		$mail{'SENDER'} 		= $cgiparams{'txt_mailsender'};
 		$mail{'RECIPIENT'}		= $cgiparams{'txt_recipient'};
 
-		$auth{'AUTHNAME'}		= $cgiparams{'txt_mailuser'};
-		$auth{'AUTHPASS'}		= $cgiparams{'txt_mailpass'};
-		$auth{'AUTHHOST'}		= $cgiparams{'txt_mailserver'};
+		if ($cgiparams{'txt_mailuser'} && $cgiparams{'txt_mailpass'}) {
+			$auth{'AUTHNAME'}		= $cgiparams{'txt_mailuser'};
+			$auth{'AUTHPASS'}		= $cgiparams{'txt_mailpass'};
+			$auth{'AUTHHOST'}		= $cgiparams{'txt_mailserver'};
+			print TXT1 "$auth{'AUTHNAME'}|$auth{'AUTHHOST'}:$auth{'AUTHPASS'}\n";
+		}
 
 		$dma{'SMARTHOST'}		= $cgiparams{'txt_mailserver'};
 		$dma{'PORT'}			= $cgiparams{'txt_mailport'};
@@ -129,7 +132,7 @@ if ($cgiparams{'ACTION'} eq "$Lang::tr{'save'}"){ #SaveButton on configsite
 			print TXT "$k $v\n";
 		}
 		close TXT;
-		print TXT1 "$auth{'AUTHNAME'}|$auth{'AUTHHOST'}:$auth{'AUTHPASS'}\n";
+		close TXT1;
 		close TXT2;
 
 	}else{
@@ -150,12 +153,15 @@ sub configsite{
 
 	#If update set fieldvalues new
 	if($cgiparams{'update'} eq 'on'){
-		$dma{'USEMAIL'}= 'on';
+		$mail{'USEMAIL'}	= 'on';
+		$mail{'SENDER'} 	=  $cgiparams{'txt_mailsender'};
+		$mail{'RECIPIENT'}	=  $cgiparams{'txt_recipient'};
 		$dma{'SMARTHOST'} 	= $cgiparams{'txt_mailserver'};
 		$dma{'PORT'} 		= $cgiparams{'txt_mailport'};
-		$auth{'AUTHUSER'} 	= $cgiparams{'txt_mailuser'};
+		$auth{'AUTHNAME'} 	= $cgiparams{'txt_mailuser'};
 		$auth{'AUTHHOST'}	= $cgiparams{'txt_mailserver'};
 		$auth{'AUTHPASS'} 	= $cgiparams{'txt_mailpass'};
+		$dma{'STARTTLS'}	= $cgiparams{'mail_tls'};
 	}
 	#find preselections
 	$checked{'usemail'}{$mail{'USEMAIL'}}	= 'CHECKED';
@@ -232,7 +238,7 @@ END
 			<td><input type='checkbox' name='mail_tls' $checked{'mail_tls'}{'on'}></td>
 		</tr>
 END
-		if (! -z $dmafile && $mail{'USEMAIL'} eq 'on'){
+		if (! -z $dmafile && $mail{'USEMAIL'} eq 'on' && !$errormessage){
 			print "<tr>";
 			print "<td></td>";
 			print "<td><input type='submit' name='ACTION' value='$Lang::tr{'email testmail'}'></td>";
@@ -328,18 +334,3 @@ sub error {
 		&Header::closebox();
 	}
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

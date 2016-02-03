@@ -5,14 +5,15 @@
 # Translators:
 # Michael Tremer <michael.tremer@ipfire.org>, 2014
 # Stefan Schantl <stefan.schantl@ipfire.org>, 2014
+# Sun Tiger, 2015
 msgid ""
 msgstr ""
 "Project-Id-Version: IPFire Project\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2014-08-21 15:12+0000\n"
-"PO-Revision-Date: 2014-08-24 19:39+0000\n"
-"Last-Translator: Stefan Schantl <stefan.schantl@ipfire.org>\n"
-"Language-Team: German (http://www.transifex.com/projects/p/ipfire/language/de/)\n"
+"PO-Revision-Date: 2015-05-07 16:52+0000\n"
+"Last-Translator: Sun Tiger\n"
+"Language-Team: German (http://www.transifex.com/mstremer/ipfire/language/de/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -53,7 +54,7 @@ msgstr "Domänenname:"
 #: networking.c:442 networking.c:552 networking.c:603 networking.c:610
 #: networking.c:713 timezone.c:63
 msgid "Unable to open settings file"
-msgstr "Settings-Datei konnte nicht geöffnet werden"
+msgstr "Einstellungs-Datei konnte nicht geöffnet werden"
 
 #: dhcp.c:111
 msgid "DHCP server configuration"
@@ -320,7 +321,7 @@ msgstr "Identifizieren"
 
 #: netstuff.c:678
 msgid "Device Identification"
-msgstr "Device-Identifizierung"
+msgstr "Geräteidentifizierung"
 
 #: netstuff.c:678
 msgid "The lights on the selected port should flash now for 10 seconds..."
