@@ -32,7 +32,7 @@ DL_FROM    = $(URL_IPFIRE)
 DIR_APP    = $(DIR_SRC)/$(THISAPP)
 TARGET     = $(DIR_INFO)/$(THISAPP)
 PROG       = ebtables
-PAK_VER    = 2
+PAK_VER    = 3
 
 DEPS       = ""
 
@@ -77,6 +77,7 @@ $(subst %,%_MD5,$(objects)) :
 $(TARGET) : $(patsubst %,$(DIR_DL)/%,$(objects))
 	@$(PREBUILD)
 	@rm -rf $(DIR_APP) && cd $(DIR_SRC) && tar zxf $(DIR_DL)/$(DL_FILE)
+	cd $(DIR_APP) && patch -Np1 -i $(DIR_SRC)/src/patches/ebtables/0001-ebtables-should-install-nothing-in-usr-local.patch
 	cd $(DIR_APP) && make $(MAKETUNING) CFLAGS="$(CFLAGS)"
 	cd $(DIR_APP) && make install
 	@rm -rf $(DIR_APP)

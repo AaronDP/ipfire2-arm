@@ -1,7 +1,7 @@
 ###############################################################################
 #                                                                             #
 # IPFire.org - A linux based firewall                                         #
-# Copyright (C) 2007-2014  IPFire Team  <info@ipfire.org>                     #
+# Copyright (C) 2007-2016  IPFire Team  <info@ipfire.org>                     #
 #                                                                             #
 # This program is free software: you can redistribute it and/or modify        #
 # it under the terms of the GNU General Public License as published by        #
@@ -121,9 +121,14 @@ ifeq "$(MACHINE_TYPE)" "arm"
 	cp -v /boot/MLO $(MNThdd)/boot/
 	cp -v /boot/u-boot.img $(MNThdd)/boot/
 	cp -v /boot/zImage-ipfire-multi $(MNThdd)/boot/
+	cp -v /boot/uInit-ipfire-multi $(MNThdd)/boot/
+	cp -v /boot/uImage-ipfire-kirkwood $(MNThdd)/boot/
+	cp -v /boot/uInit-ipfire-kirkwood $(MNThdd)/boot/
+	cp -v /boot/uEnv.txt $(MNThdd)/boot/
 	# work around a u-boot bug not find the folders sometimes
 	mkdir -pv $(MNThdd)/boot/dtb-$(KVER)-ipfire-multi
 	mkdir -pv $(MNThdd)/boot/dtb-$(KVER)-ipfire-kirkwood
+	
 	sync
 	umount $(MNThdd)/boot
 	mount $(PART_BOOT) $(MNThdd)/boot
@@ -182,14 +187,18 @@ endif
 	mkdir -pv $(MNThdd)/boot/grub
 	chroot $(MNThdd) grub-mkconfig -o /boot/grub/grub.cfg
 
-	# Insert the UUID because grub-mkconfig fails to detect that correctly
+	# Insert the UUID because grub-mkconfig often fails to
+	# detect that correctly
 	sed -i $(MNThdd)/boot/grub/grub.cfg \
-		-e "s/root=[a-z0-9\/]*/root=UUID=$$(blkid -o value -s UUID $(PART_ROOT))/g"
+		-e "s/root=[A-Za-z0-9\/=-]*/root=UUID=$$(blkid -o value -s UUID $(PART_ROOT))/g"
 
 	# Install GRUB
 	grub-install --force --recheck --no-floppy \
 		--root-directory=$(MNThdd) $(DEVICE)
 endif
+
+	# Set ramdisk mode to automatic
+	echo RAMDISK_MODE=2 > $(MNThdd)/etc/sysconfig/ramdisk
 
 	# Automatically resize the root partition to its maximum size at first boot
 	touch $(MNThdd)/.partresize

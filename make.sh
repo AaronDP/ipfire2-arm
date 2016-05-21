@@ -17,16 +17,16 @@
 # along with IPFire; if not, write to the Free Software                    #
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA #
 #                                                                          #
-# Copyright (C) 2007-2015 IPFire Team <info@ipfire.org>.                   #
+# Copyright (C) 2007-2016 IPFire Team <info@ipfire.org>.                   #
 #                                                                          #
 ############################################################################
 #
 
 NAME="IPFire"							# Software name
 SNAME="ipfire"							# Short name
-VERSION="2.17"							# Version number
-CORE="97"							# Core Level (Filename)
-PAKFIRE_CORE="97"						# Core Level (PAKFIRE)
+VERSION="2.19"							# Version number
+CORE="102"							# Core Level (Filename)
+PAKFIRE_CORE="102"						# Core Level (PAKFIRE)
 GIT_BRANCH=`git rev-parse --abbrev-ref HEAD`			# Git Branch
 SLOGAN="www.ipfire.org"						# Software slogan
 CONFIG_ROOT=/var/ipfire						# Configuration rootdir
@@ -36,7 +36,7 @@ BUILD_IMAGES=1							# Flash and Xen Downloader
 KVER=`grep --max-count=1 VER lfs/linux | awk '{ print $3 }'`
 GIT_TAG=$(git tag | tail -1)					# Git Tag
 GIT_LASTCOMMIT=$(git log | head -n1 | cut -d" " -f2 |head -c8)	# Last commit
-TOOLCHAINVER=10
+TOOLCHAINVER=11
 
 # New architecture variables
 BUILD_ARCH="$(uname -m)"
@@ -221,7 +221,7 @@ prepareenv() {
     # Run LFS static binary creation scripts one by one
     export CCACHE_DIR=$BASEDIR/ccache
     export CCACHE_COMPRESS=1
-    export CCACHE_COMPILERCHECK="string:toolchain-${TOOLCHAINVER}:${TARGET_ARCH}"
+    export CCACHE_COMPILERCHECK="string:toolchain-${TOOLCHAINVER} ${TARGET_ARCH}"
 
     # Remove pre-install list of installed files in case user erase some files before rebuild
     rm -f $BASEDIR/build/usr/src/lsalr 2>/dev/null
@@ -287,6 +287,7 @@ buildtoolchain() {
     lfsmake1 linux			TOOLS=1 KCFG="-headers"
     lfsmake1 glibc
     lfsmake1 cleanup-toolchain		PASS=1
+    lfsmake1 gcc			PASS=L
     lfsmake1 binutils			PASS=2
     lfsmake1 gcc			PASS=2
     lfsmake1 ccache			PASS=2
@@ -330,6 +331,7 @@ buildbase() {
     lfsmake2 gmp
     lfsmake2 gmp-compat
     lfsmake2 mpfr
+    lfsmake2 libmpc
     lfsmake2 file
     lfsmake2 gcc
     lfsmake2 sed
@@ -398,7 +400,9 @@ buildipfire() {
   ipfiremake unzip
   ipfiremake which
   ipfiremake linux-firmware
+  ipfiremake ath10k-firmware
   ipfiremake dvb-firmwares
+  ipfiremake mt7601u-firmware
   ipfiremake zd1211-firmware
   ipfiremake rpi-firmware
   ipfiremake bc
@@ -546,6 +550,7 @@ buildipfire() {
   ipfiremake GD-TextUtil
   ipfiremake perl-Device-SerialPort
   ipfiremake perl-Device-Modem
+  ipfiremake perl-Apache-Htpasswd
   ipfiremake gnupg
   ipfiremake hdparm
   ipfiremake sdparm
@@ -675,6 +680,8 @@ buildipfire() {
   ipfiremake libevent2
   ipfiremake portmap
   ipfiremake nfs
+  ipfiremake gnu-netcat
+  ipfiremake ncat
   ipfiremake nmap
   ipfiremake ncftp
   ipfiremake etherwake
@@ -692,6 +699,11 @@ buildipfire() {
   ipfiremake elinks
   ipfiremake igmpproxy
   ipfiremake fbset
+  ipfiremake opus
+  ipfiremake python-six
+  ipfiremake python-pyparsing
+  ipfiremake spice-protocol
+  ipfiremake spice
   ipfiremake sdl
   ipfiremake qemu
   ipfiremake sane
@@ -740,13 +752,13 @@ buildipfire() {
   ipfiremake gutenprint
   ipfiremake apcupsd
   ipfiremake iperf
-  ipfiremake netcat
+  ipfiremake iperf3
   ipfiremake 7zip
   ipfiremake lynis
   ipfiremake streamripper
   ipfiremake sshfs
   ipfiremake taglib
-  ipfiremake mediatomb
+  #ipfiremake mediatomb
   ipfiremake sslh
   ipfiremake perl-gettext
   ipfiremake perl-Sort-Naturally
@@ -844,6 +856,11 @@ buildipfire() {
   ipfiremake swconfig
   ipfiremake haproxy
   ipfiremake ipset
+  ipfiremake lua
+  ipfiremake dnsdist
+  ipfiremake bird
+  ipfiremake dmidecode
+  ipfiremake mcelog
 }
 
 buildinstaller() {
