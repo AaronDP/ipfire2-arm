@@ -516,12 +516,14 @@ sub checksubnets
 		&General::readhasharray("${General::swroot}/vpn/config", \%ipsecconf);
 		foreach my $key (keys %ipsecconf){
 			if ($ipsecconf{$key}[11] ne ''){
-				my ($ipsecip,$ipsecsub) = split (/\//, $ipsecconf{$key}[11]);
-				$ipsecsub=&iporsubtodec($ipsecsub);
-				if($ipsecconf{$key}[1] ne $ccdname){
-					if ( &IpInSubnet ($ip,$ipsecip,$ipsecsub) ){
-						$errormessage=$Lang::tr{'ccd err isipsecnet'}." Name:  $ipsecconf{$key}[1]";
-						return $errormessage;
+				foreach my $ipsecsubitem (split(/\|/, $ipsecconf{$key}[11])) {
+					my ($ipsecip,$ipsecsub) = split (/\//, $ipsecconf{$key}[11]);
+					$ipsecsub=&iporsubtodec($ipsecsub);
+					if($ipsecconf{$key}[1] ne $ccdname){
+						if ( &IpInSubnet ($ip,$ipsecip,$ipsecsub) ){
+							$errormessage=$Lang::tr{'ccd err isipsecnet'}." Name:  $ipsecconf{$key}[1]";
+							return $errormessage;
+						}
 					}
 				}
 			}
@@ -633,15 +635,10 @@ sub validdomainname
 		# Each part should be no more than 63 characters in length
 		if (length ($part) < 1 || length ($part) > 63) {
 			return 0;}
-		# Only valid characters are a-z, A-Z, 0-9 and -
-		if ($part !~ /^[a-zA-Z0-9-]*$/) {
-			return 0;}
-		# First character can only be a letter or a digit
-		if (substr ($part, 0, 1) !~ /^[a-zA-Z0-9]*$/) {
-			return 0;}
-		# Last character can only be a letter or a digit
-		if (substr ($part, -1, 1) !~ /^[a-zA-Z0-9]*$/) {
-			return 0;}
+		# Only valid characters are a-z, A-Z, 0-9, _ and -
+		if ($part !~ /^[a-zA-Z0-9_-]*$/) {
+			return 0;
+		}
 	}
 	return 1;
 }
