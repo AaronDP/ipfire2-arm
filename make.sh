@@ -25,8 +25,8 @@
 NAME="IPFire"							# Software name
 SNAME="ipfire"							# Short name
 VERSION="2.19"							# Version number
-CORE="103"							# Core Level (Filename)
-PAKFIRE_CORE="103"						# Core Level (PAKFIRE)
+CORE="105"							# Core Level (Filename)
+PAKFIRE_CORE="105"						# Core Level (PAKFIRE)
 GIT_BRANCH=`git rev-parse --abbrev-ref HEAD`			# Git Branch
 SLOGAN="www.ipfire.org"						# Software slogan
 CONFIG_ROOT=/var/ipfire						# Configuration rootdir
@@ -350,10 +350,10 @@ buildbase() {
     lfsmake2 perl
     lfsmake2 readline
     lfsmake2 readline-compat
+    lfsmake2 bzip2
     lfsmake2 pcre
     lfsmake2 pcre-compat
     lfsmake2 bash
-    lfsmake2 bzip2
     lfsmake2 diffutils
     lfsmake2 e2fsprogs
     lfsmake2 ed
@@ -708,6 +708,7 @@ buildipfire() {
   ipfiremake spice-protocol
   ipfiremake spice
   ipfiremake sdl
+  ipfiremake libusbredir
   ipfiremake qemu
   ipfiremake sane
   ipfiremake netpbm
@@ -869,6 +870,10 @@ buildipfire() {
   ipfiremake libpciaccess
   ipfiremake libyajl
   ipfiremake libvirt
+  ipfiremake freeradius
+  ipfiremake perl-common-sense
+  ipfiremake perl-inotify2
+  ipfiremake perl-Net-IP
 }
 
 buildinstaller() {

@@ -22,9 +22,14 @@
 ############################################################################
 #
 . /opt/pakfire/lib/functions.sh
-stop_service ${NAME}
+stop_service libvirtd
+stop_service virtlogd
+extract_backup_includes
+make_backup ${NAME}
+
 remove_files
 
 rm -f /etc/rc.d/rc*.d/*libvirt-guests
 rm -f /etc/rc.d/rc*.d/*libvirtd
+rm -f /etc/rc.d/rc*.d/*virtlogd
 

@@ -1,5 +1,6 @@
---- a/arch/arm/mach-omap2/cclock3xxx_data.c~	2015-12-12 11:00:10.474423373 +0000
-+++ b/arch/arm/mach-omap2/cclock3xxx_data.c	2015-12-12 11:30:31.198452547 +0000
+diff -Naur linux-3.14.76.org/arch/arm/mach-omap2/cclock3xxx_data.c linux-3.14.76/arch/arm/mach-omap2/cclock3xxx_data.c
+--- linux-3.14.76.org/arch/arm/mach-omap2/cclock3xxx_data.c	2016-08-18 06:26:02.000000000 +0200
++++ linux-3.14.76/arch/arm/mach-omap2/cclock3xxx_data.c	2016-08-18 06:37:51.442186995 +0200
 @@ -250,7 +250,7 @@
  
  static struct clk dpll1_ck;
@@ -9,9 +10,9 @@
  
  static struct clk_ops dpll1_ck_ops_34xx __initdata = {
  	.init		= &omap2_init_clk_clkdm,
-diff -Naur linux-3.14.63-org/net/ipv6/addrconf.c linux-3.14.63/net/ipv6/addrconf.c
---- linux-3.14.63-org/net/ipv6/addrconf.c	2016-03-04 22:56:07.375481749 +0100
-+++ linux-3.14.63/net/ipv6/addrconf.c	2016-03-04 23:08:34.285482105 +0100
+diff -Naur linux-3.14.76.org/net/ipv6/addrconf.c linux-3.14.76/net/ipv6/addrconf.c
+--- linux-3.14.76.org/net/ipv6/addrconf.c	2016-08-18 06:25:51.000000000 +0200
++++ linux-3.14.76/net/ipv6/addrconf.c	2016-08-18 06:31:51.802186824 +0200
 @@ -4818,7 +4818,7 @@
  {
  	struct inet6_dev *idev = ctl->extra1;

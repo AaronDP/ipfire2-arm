@@ -33,9 +33,11 @@ etc/rc.d/init.d/fcron
 etc/rc.d/init.d/fireinfo
 etc/rc.d/init.d/firewall
 etc/rc.d/init.d/firstsetup
+#etc/rc.d/init.d/freeradius
 etc/rc.d/init.d/fsresize
 etc/rc.d/init.d/functions
 #etc/rc.d/init.d/gnump3d
+#etc/rc.d/init.d/guardian
 etc/rc.d/init.d/halt
 #etc/rc.d/init.d/haproxy
 #etc/rc.d/init.d/hostapd
@@ -93,6 +95,7 @@ etc/rc.d/init.d/networking/red.up/23-RS-snort
 etc/rc.d/init.d/networking/red.up/24-RS-qos
 etc/rc.d/init.d/networking/red.up/27-RS-squid
 etc/rc.d/init.d/networking/red.up/30-ddns
+#etc/rc.d/init.d/networking/red.up/35-guardian
 etc/rc.d/init.d/networking/red.up/40-ipac
 etc/rc.d/init.d/networking/red.up/50-ipsec
 etc/rc.d/init.d/networking/red.up/50-ovpn
@@ -138,6 +141,7 @@ etc/rc.d/init.d/udev_retry
 etc/rc.d/init.d/upnpd
 #etc/rc.d/init.d/vdr
 #etc/rc.d/init.d/vdradmin
+#etc/rc.d/init.d/virtlogd
 etc/rc.d/init.d/vnstat
 #etc/rc.d/init.d/vsftpd
 etc/rc.d/init.d/waitdrives

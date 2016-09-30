@@ -24,10 +24,10 @@
 
 include Config
 
-VER         = 3.14.65
-RPI_PATCHES = 3.14.65-grsec-ipfire1
-A7M_PATCHES = 3.14.65-grsec-ipfire1
-GRS_PATCHES = grsecurity-3.1ipfire-3.14.65-v1.patch.xz
+VER         = 3.14.79
+RPI_PATCHES = 3.14.79-grsec-ipfire1
+A7M_PATCHES = 3.14.79-grsec-ipfire1
+GRS_PATCHES = grsecurity-3.1ipfire-3.14.79-v1.patch.xz
 
 
 THISAPP    = linux-$(VER)
@@ -37,7 +37,7 @@ DIR_APP    = $(DIR_SRC)/$(THISAPP)
 CFLAGS     =
 CXXFLAGS   =
 
-PAK_VER    = 68
+PAK_VER    = 72
 DEPS	   = ""
 
 KERNEL_ARCH = $(MACHINE)
@@ -83,10 +83,10 @@ rpi-patches-$(RPI_PATCHES).patch.xz		= $(URL_IPFIRE)/rpi-patches-$(RPI_PATCHES).
 arm7-multi-patches-$(A7M_PATCHES).patch.xz	= $(URL_IPFIRE)/arm7-multi-patches-$(A7M_PATCHES).patch.xz
 $(GRS_PATCHES)					= $(URL_IPFIRE)/$(GRS_PATCHES)
 
-$(DL_FILE)_MD5					= cfc70821a04acb80ded45e408e9faf36
-rpi-patches-$(RPI_PATCHES).patch.xz_MD5		= 0d1059c18f4810abbe9aafb6beab445b
-arm7-multi-patches-$(A7M_PATCHES).patch.xz_MD5	= 589eb8703fa2ba2944b2f925b7f7ffb3
-$(GRS_PATCHES)_MD5				= 548571a2c70219cce9728eb8b8949030
+$(DL_FILE)_MD5					= ec5b09d8ad2ebf92e6f51a727a338559
+rpi-patches-$(RPI_PATCHES).patch.xz_MD5		= a02a7fd54c642c1e3578a00ed22f54f8
+arm7-multi-patches-$(A7M_PATCHES).patch.xz_MD5	= 6c3b11e51caa278dbeacd1e23c2b171b
+$(GRS_PATCHES)_MD5				= 7fe448b53558082395f68c5db94af1a7
 
 install : $(TARGET)
 
@@ -199,6 +199,7 @@ endif
 	cd $(DIR_APP) && patch -Np1 < $(DIR_SRC)/src/patches/linux/0023-hyperv-Fix-error-return-code-in-netvsc_init_buf.patch
 	cd $(DIR_APP) && patch -Np1 < $(DIR_SRC)/src/patches/linux/0024-hyperv-Fix-a-bug-in-netvsc_send.patch
 	cd $(DIR_APP) && patch -Np1 < $(DIR_SRC)/src/patches/linux/0025-Drivers-hv-vmbus-Support-per-channel-driver-state.patch
+	cd $(DIR_APP) && patch -Np1 < $(DIR_SRC)/src/patches/linux-hyperv_Mark_the_Hyoer-V_TSC_as_unstable.patch
 
 	# fix empty symbol crc's
 	cd $(DIR_APP) && patch -Np1 < $(DIR_SRC)/src/patches/linux-genksyms_fix_typeof_handling.patch
