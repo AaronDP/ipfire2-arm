@@ -24,6 +24,7 @@
 package GeoIP;
 
 use Locale::Codes::Country;
+use Geo::IP::PurePerl;
 
 # Function to get the flag icon for a specified country code.
 sub get_flag_icon($) {
@@ -100,6 +101,24 @@ sub get_full_country_name($) {
 	}
 
 	return $name;
+}
+
+# Function to get the country code for a given IP-address.
+sub get_ccode_by_address ($) {
+	my ($address) = @_;
+
+	# Use the GeoIP perl module to obtain the
+	# corresponding country code.
+	my $gi = Geo::IP::PurePerl->new();
+
+	# Grab the country code for the given address.
+	my $ccode = $gi->country_code_by_name($address);
+
+	# Convert the country code to upper case format.
+	my $fcode = uc($ccode);
+
+	# Retun the obtained country code.
+	return $fcode;
 }
 
 1;
