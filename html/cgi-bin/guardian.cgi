@@ -20,7 +20,6 @@
 ###############################################################################
 
 use strict;
-use Locale::Codes::Country;
 use Guardian::Socket;
 
 # enable only the following on debugging purpose
@@ -30,6 +29,10 @@ use Guardian::Socket;
 require '/var/ipfire/general-functions.pl';
 require "${General::swroot}/lang.pl";
 require "${General::swroot}/header.pl";
+
+# Load network and GeoIP related functions.
+require "${General::swroot}/network-functions.pl";
+require "${General::swroot}/geoip-functions.pl";
 
 #workaround to suppress a warning when a variable is used only once
 my @dummy = (
@@ -659,6 +662,7 @@ sub showIgnoreBox() {
 	print <<END;
 		<table width='80%'>
 			<tr>
+				<td class='base' bgcolor='$color{'color20'}'><b>$Lang::tr{'country'}</td>
 				<td class='base' bgcolor='$color{'color20'}'><b>$Lang::tr{'ip address'}</b></td>
 				<td class='base' bgcolor='$color{'color20'}'><b>$Lang::tr{'remark'}</b></td>
 				<td class='base' colspan='3' bgcolor='$color{'color20'}'></td>
@@ -697,8 +701,23 @@ END
 						$gdesc = $Lang::tr{'click to enable'};
 					}
 
+					# Get the country code based on the address.
+					my $ccode = &GeoIP::get_ccode_by_address($address);
+
+					# Get the full country name based on the detected country code.
+					my $cname = &GeoIP::get_full_country_name($ccode);
+
+					# Get the flag icon for the country.
+					my $flag_icon = &GeoIP::get_flag_icon($ccode);
+					my $flag;
+
+					if ($flag_icon) {
+						$flag="<img src='$flag_icon' alt='$cname' title='$cname'>";
+					}
+
 					print <<END;
 					<tr>
+						<td width='10%' class='base' align='center' $col>$flag</td>
 						<td width='20%' class='base' $col>$address</td>
 						<td width='65%' class='base' $col>$remark</td>
 
@@ -791,7 +810,7 @@ sub showBlockedBox() {
 	print <<END;
 	<table width='60%'>
 		<tr>
-			<td colspan='2' class='base' bgcolor='$color{'color20'}'><b>$Lang::tr{'guardian blocked hosts'}</b></td>
+			<td colspan='3' class='base' bgcolor='$color{'color20'}'><b>$Lang::tr{'guardian blocked hosts'}</b></td>
 		</tr>
 END
 
@@ -814,9 +833,24 @@ END
 				$col="bgcolor='$color{'color20'}'";
 			}
 
+			# Get the country code based on the address.
+			my $ccode = &GeoIP::get_ccode_by_address($blocked_host);
+
+			# Get the full country name based on the detected country code.
+			my $cname = &GeoIP::get_full_country_name($ccode);
+
+			# Get the flag icon for the country.
+			my $flag_icon = &GeoIP::get_flag_icon($ccode);
+			my $flag;
+
+			if ($flag_icon) {
+				$flag="<img src='$flag_icon' alt='$cname' title='$cname'>";
+			}
+
 			print <<END;
 			<tr>
-				<td width='80%' class='base' $col><a href='/cgi-bin/ipinfo.cgi?ip=$blocked_host'>$blocked_host</a></td>
+				<td width='10%' class='base' align='center' $col>$flag</td>
+				<td width='70%' class='base' $col><a href='/cgi-bin/ipinfo.cgi?ip=$blocked_host'>$blocked_host</a></td>
 				<td width='20%' align='center' $col>
 					<form method='post' name='frmb$id' action='$ENV{'SCRIPT_NAME'}'>
 						<input type='image' name='$Lang::tr{'unblock'}' src='/images/delete.gif' title='$Lang::tr{'unblock'}' alt='$Lang::tr{'unblock'}'>
