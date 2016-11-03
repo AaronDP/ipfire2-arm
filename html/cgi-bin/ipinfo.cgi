@@ -30,6 +30,7 @@ use strict;
 require '/var/ipfire/general-functions.pl';
 require "${General::swroot}/lang.pl";
 require "${General::swroot}/header.pl";
+require "${General::swroot}/geoip-functions.pl";
 
 my %cgiparams=();
 
@@ -49,6 +50,15 @@ if (&General::validip($addr)) {
 	my $iaddr = inet_aton($addr);
 	my $hostname = gethostbyaddr($iaddr, AF_INET);
 	if (!$hostname) { $hostname = $Lang::tr{'lookup failed'}; }
+
+	# Obtain the country code for the given IP-address.
+	my $ccode = &GeoIP::get_ccode_by_address($addr);
+
+	# Get full country name.
+	my $cname = &GeoIP::get_full_country_name($ccode);
+
+	# Get flag icon for of the country.
+	my $flag_icon = &GeoIP::get_flag_icon($ccode);
 
 	my $sock = new IO::Socket::INET ( PeerAddr => $whoisname, PeerPort => 43, Proto => 'tcp');
 	if ($sock)
@@ -80,8 +90,36 @@ if (&General::validip($addr)) {
 	{
 		@lines = ( "$Lang::tr{'unable to contact'} $whoisname" );
 	}
+	&Header::openbox('100%', 'left', $addr .
+		' <img src=\'' . $flag_icon . '\' border=\'0\' align=\'absmiddle\' alt=\'' .$cname .'\' title=\'' . $cname . '\'>
+		(' . $hostname . ') : '. $whoisname . '
+	');
 
-	&Header::openbox('100%', 'left', $addr . ' (' . $hostname . ') : '.$whoisname);
+	print<<END;
+
+	<table width="50%" border="0">
+		<tr>
+			<td class="base" width="30%"><b>$Lang::tr{'ip reputational info'}</b></td>
+			<td class="base" width="20%" align="center">
+				<a href="http://www.ipvoid.com/scan/$addr" target="_blank">
+					<img src="/images/ipvoid.ico" title="IpVoid" border="0"> IPVoid
+				</a>
+			</td>
+			<td class="base" width="20%" align="center">
+				<a href="https://www.virustotal.com/en/ip-address/$addr/information" target="_blank">
+					<img src="/images/virustotal.ico" title="VirusTotal" border="0" /> VirusTotal
+				</a>
+			</td>
+			<td class="base" width="20%" align="center">
+				<a href="http://multirbl.valli.org/lookup/$addr.html" target="_blank">
+					<img src="/images/rbl.jpg" title="MultiRBL" border="0" /> MultiRBL
+				</a>
+			</td>
+		</tr>
+	</table>
+	<br><br>
+END
+
 	print "<pre>\n";
 	foreach my $line (@lines) {
 		print &Header::cleanhtml($line,"y");

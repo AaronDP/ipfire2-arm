@@ -1403,6 +1403,7 @@
 'ip alias changed' => 'External IP alias changed',
 'ip alias removed' => 'External IP alias removed',
 'ip info' => 'IP Information',
+'ip reputational info' => 'IP Reputational Info:',
 'ipfire has now rebooted' => 'IPFire is rebooting now.',
 'ipfire has now shutdown' => 'IPFire is shutting down now.',
 'ipfire side' => 'IPFire side:',
