@@ -72,7 +72,6 @@ our %mainsettings = ();
 # (File exists when the addon is installed.)
 my $owncloud_meta = "/opt/pakfire/db/installed/meta-owncloud";
 
-
 # File declarations.
 my $settingsfile = "${General::swroot}/guardian/settings";
 my $ignoredfile = "${General::swroot}/guardian/ignored";
@@ -376,6 +375,9 @@ if ($settings{'ACTION'} eq $Lang::tr{'save'}) {
 &General::readhash("${General::swroot}/guardian/settings", \%settings);
 &General::readhasharray("${General::swroot}/guardian/ignored", \%ignored);
 
+# Grab configured networks.
+my %networks = &GrabNetworks();
+
 # Call functions to generate whole page.
 &showMainBox();
 &showIgnoreBox();
@@ -660,9 +662,10 @@ sub showIgnoreBox() {
         &Header::openbox('100%', 'center', $Lang::tr{'guardian ignored hosts'});
 
 	print <<END;
-		<table width='80%'>
+		<table width='100%'>
 			<tr>
 				<td class='base' bgcolor='$color{'color20'}'><b>$Lang::tr{'country'}</td>
+				<td class='base' bgcolor='$color{'color20'}'><b>$Lang::tr{'network'}</td>
 				<td class='base' bgcolor='$color{'color20'}'><b>$Lang::tr{'ip address'}</b></td>
 				<td class='base' bgcolor='$color{'color20'}'><b>$Lang::tr{'remark'}</b></td>
 				<td class='base' colspan='3' bgcolor='$color{'color20'}'></td>
@@ -701,6 +704,32 @@ END
 						$gdesc = $Lang::tr{'click to enable'};
 					}
 
+					# Select network name and colour.
+					my $network_name;
+					my $network_colour;
+
+					# Loop through the hash of configured networks and determine
+					# which network the current address is.
+					foreach my $network (keys %networks) {
+						# Check if the current address is part of
+						# the processed network.
+						if (&Network::ip_address_in_network($address, $network)) {
+							# Get network name and colour.
+							$network_name = $networks{$network}[0];
+							$network_colour = $networks{$network}[1];
+
+							# Required data have been grabbed.
+							last;
+						}
+					}
+
+					# If the address is not part of an local network or VPN is
+					# part of the RED network zone.
+					unless ($network_name && $network_colour) {
+						$network_name = $Lang::tr{'red'};
+						$network_colour = $Header::colourred;
+					}
+
 					# Get the country code based on the address.
 					my $ccode = &GeoIP::get_ccode_by_address($address);
 
@@ -717,8 +746,9 @@ END
 
 					print <<END;
 					<tr>
-						<td width='10%' class='base' align='center' $col>$flag</td>
-						<td width='20%' class='base' $col>$address</td>
+						<td width='7%' class='base' align='center' $col>$flag</td>
+						<td width='10%' class='base' $col><font color="$network_colour">$network_name</font></td>
+						<td width='15%' class='base' $col>$address</td>
 						<td width='65%' class='base' $col>$remark</td>
 
 						<td align='center' $col>
@@ -808,9 +838,9 @@ sub showBlockedBox() {
 	&Header::openbox('100%', 'center', $Lang::tr{'guardian blocked hosts'});
 
 	print <<END;
-	<table width='60%'>
+	<table width='100%'>
 		<tr>
-			<td colspan='3' class='base' bgcolor='$color{'color20'}'><b>$Lang::tr{'guardian blocked hosts'}</b></td>
+			<td colspan='4' class='base' bgcolor='$color{'color20'}'><b>$Lang::tr{'guardian blocked hosts'}</b></td>
 		</tr>
 END
 
@@ -833,6 +863,32 @@ END
 				$col="bgcolor='$color{'color20'}'";
 			}
 
+			# Select network name and colour.
+			my $network_name;
+			my $network_colour;
+
+			# Loop through the hash of configured networks and determine
+			# which network the current address is.
+			foreach my $network (keys %networks) {
+				# Check if the current address is part of
+				# the processed network.
+				if (&Network::ip_address_in_network($blocked_host, $network)) {
+					# Get network name and colour.
+					$network_name = $networks{$network}[0];
+					$network_colour = $networks{$network}[1];
+
+					# Required data have been grabbed.
+					last;
+				}
+			}
+
+			# If the address is not part of an local network or VPN is
+			# part of the RED network zone.
+			unless ($network_name && $network_colour) {
+				$network_name = $Lang::tr{'red'};
+				$network_colour = $Header::colourred;
+			}
+
 			# Get the country code based on the address.
 			my $ccode = &GeoIP::get_ccode_by_address($blocked_host);
 
@@ -850,6 +906,7 @@ END
 			print <<END;
 			<tr>
 				<td width='10%' class='base' align='center' $col>$flag</td>
+				<td width='10%' class='base' $col><font colour='network_colour'$network_name</font></td>
 				<td width='70%' class='base' $col><a href='/cgi-bin/ipinfo.cgi?ip=$blocked_host'>$blocked_host</a></td>
 				<td width='20%' align='center' $col>
 					<form method='post' name='frmb$id' action='$ENV{'SCRIPT_NAME'}'>
@@ -1140,6 +1197,133 @@ sub GenerateIgnoreFile() {
 	close(FILE);
 }
 
+sub GrabNetworks() {
+	my %networks;
+	my @local_zones = ("GREEN","BLUE","ORANGE");
+
+	# Process the local zones.
+	foreach my $zone (@local_zones) {
+		# Skip the zone if it is not configured.
+		next unless ($netsettings{$zone."_DEV"});
+
+		# Get the netaddress and netmask of the zone.
+		my $netaddress = $netsettings{$zone."_NETADDRESS"};
+		my $netmask = $netsettings{$zone."_NETMASK"};
+
+		# Generate the subnet.
+		my $subnet = join("/", $netaddress, $netmask);
+
+		# Skip if the generated subnet is not valid.
+		next unless (&Network::check_subnet($subnet));
+
+		# Convert zone name into lower case format.
+		my $zone_lc = lc($zone);
+
+		# Grab the colour code for the current zone.
+		my $colour;
+		my $name;
+		{
+			# no strict is lexially scoped
+			no strict 'refs';
+			$colour = ${"Header::colour" . "$zone_lc"};
+			$name = $Lang::tr{"fwhost " . "$zone_lc"};
+		}
+
+		# Add the subnet to the networks hash.
+		$networks{$subnet} = ["$name","$colour"];
+
+		# Obtain the used interface.
+		my $interface = $netsettings{$zone."_DEV"};
+
+		# Get any additional routes for the current zone.
+		my @routes = &_get_routes_of_interface($interface);
+
+		# Add all grabbed routes to the networks hash.
+		foreach my $route (@routes) {
+			$networks{$subnet} = ["$name","$colour"];
+		}
+	}
+
+	# Add OpenVPN tunnel connections.
+	if (-e "${General::swroot}/ovpn/ccd.conf") {
+		# Open the config file.
+		open(OVPNSUB, "${General::swroot}/ovpn/ccd.conf");
+
+		# Read an store all lines in the ovpnsub array.
+		my @ovpnsub = <OVPNSUB>;
+
+		# Close config file.
+		close(OVPNSUB);
+
+		# Process the grabbed OpenVPN subnets.
+		foreach my $ovpnsubnet (@ovpnsub) {
+			# Skip the subnet if it is not valid.
+			next unless (&Network::check_subnet($ovpnsubnet));
+
+			# Add the subnet to the networks hash.
+			$networks{$ovpnsubnet} = ["$Lang::tr{'ovpn'}", "$Header::colourovpn"];
+		}
+	}
+
+	# Add OpenVPN Net-to-Net connections.
+	if (-e "${General::swroot}/ovpn/n2nconf") {
+		# Open config file.
+		open(OVPNN2N, "${General::swroot}/ovpn/ovpnconfig");
+
+		# Read and store all lines in the ovpnn2n array.
+		my @ovpnn2n = <OVPNN2N>;
+
+		# Close config file.
+		close(OVPNN2N);
+
+		# Process the grabbed OpenVPN Net-to-Net subnets.
+		foreach my $line (@ovpnn2n) {
+			my @ovpn = split(',', $line);
+
+			# Skip if the current line is no Net-to-Net connection.
+			next if ($ovpn[4] ne 'net');
+
+			# Gather the subnet.
+			my $subnet = $ovpn[12];
+
+			# Skip if the subnet is not valid.
+			next unless (&Network::check_subnet($subnet));
+
+			# Add the OpenVPN subnet to the networks hash.
+			$networks{$subnet} = ["$Lang::tr{'ovpn'}", "$Header::colourovpn"];
+		}
+	}
+
+	# Add IPsec tunnels.
+	if (-e "${General::swroot}/vpn/config") {
+		# Open the config file.
+		open(IPSEC, "${General::swroot}/vpn/config");
+
+		# Read and store all lines in the ipsec array.
+		my @ipsec = <IPSEC>;
+
+		# Close file.
+		close(IPSEC);
+
+		# Process the grabbed IPsec tunnels.
+		foreach my $line (@ipsec) {
+			my @vpn = split(',', $line);
+
+			# Obtain the IPsec subnet.
+			my $subnet = $vpn[12];
+
+			# Skip if the subnet is not valid.
+			next unless (&Network::check_subnet($subnet));
+
+			# Add the obtained subnet to the networks hash.
+			$networks{$subnet} = ["$Lang::tr{'ipsec'}", "$Header::colourvpn"];
+		}
+	}
+
+	# Return the network hash.
+	return %networks;
+}
+
 # Private subfunction to obtain IP-addresses from given file names.
 #
 sub _get_address_from_file ($) {
@@ -1168,4 +1352,40 @@ sub _get_address_from_file ($) {
 
 	# Return nothing.
 	return;
+}
+
+# Private subfunction to get the routes of a given network interface.
+#
+sub _get_routes_of_interface ($) {
+	my $interface = shift;
+	my @routes;
+
+	# Call binary to get the routes and store in a temporary array.
+	my @output = `/sbin/route -n | /bin/grep $interface`;
+
+	# Loop through the temporary array.
+	foreach my $line (@output) {
+		# Remove newlines.
+		chomp($line);
+
+		# Splitt content of the line and store the single items into
+		# a temporary array.
+		my @temp = split(/[\t ]+/, $line);
+
+		# Assign some nice varables for the temporary items.
+		my $address = $temp[0];
+		my $netmask = $temp[2];
+
+		# Generate the network.
+		my $route = join("/", $address, $netmask);
+
+		# Skip if the route is not a valid IP-address plus netmask (subnet).
+		next unless (&Network::check_subnet($route));
+
+		# Add the route to the routes array.
+		push(@routes, $route);
+	}
+
+	# Return the array with the obtained routes.
+	return @routes;
 }
