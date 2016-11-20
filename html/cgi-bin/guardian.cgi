@@ -1264,12 +1264,21 @@ sub GrabNetworks() {
 		close(OVPNSUB);
 
 		# Process the grabbed OpenVPN subnets.
-		foreach my $ovpnsubnet (@ovpnsub) {
+		foreach my $line (@ovpnsub) {
+			# Remove any newlines.
+			chomp($line);
+
+			# Splitt the line into parts.
+			my @ovpnsubnet = split(',', $line);
+
+			# Grab subnet.
+			my $ovpnnet = $ovpnsubnet[2];
+
 			# Skip the subnet if it is not valid.
-			next unless (&Network::check_subnet($ovpnsubnet));
+			next unless (&Network::check_subnet($ovpnnet));
 
 			# Add the subnet to the networks hash.
-			$networks{$ovpnsubnet} = ["$Lang::tr{'ovpn'}", "$Header::colourovpn"];
+			$networks{$ovpnnet} = ["$Lang::tr{'ovpn'}", "$Header::colourovpn"];
 		}
 	}
 
