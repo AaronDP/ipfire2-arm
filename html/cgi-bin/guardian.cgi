@@ -1244,6 +1244,14 @@ sub GrabNetworks() {
 		}
 	}
 
+	# Add localhost.
+	my $localhost = "127.0.0.1/32";
+	$networks{$localhost} = ["$Lang::tr{'localhost'}","$Header::colourfw"];
+
+	# Add Multicast addresses.
+	my $multicast = "224.0.0.0/239.0.0.0";
+	$networks{$multicast} = ["$Lang::tr{'multicast'}","$Header::colourfw"];
+
 	# Add OpenVPN tunnel connections.
 	if (-e "${General::swroot}/ovpn/ccd.conf") {
 		# Open the config file.
