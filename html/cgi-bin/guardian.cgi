@@ -1252,7 +1252,24 @@ sub GrabNetworks() {
 	my $multicast = "224.0.0.0/239.0.0.0";
 	$networks{$multicast} = ["$Lang::tr{'multicast'}","$Header::colourfw"];
 
-	# Add OpenVPN tunnel connections.
+	# Add OpenVPN subnet for RW connections.
+	if (-e "${General::swroot}/ovpn/settings") {
+		my %ovpnsettings = ();
+
+		# Read OpenVPN server settings for RW connections.
+		&General::readhash("${General::swroot}/ovpn/settings", \%ovpnsettings);
+
+		# Check if the grabbed subnet is valid.
+		if (&Network::check_subnet($ovpnsettings{'DOVPN_SUBNET'})) {
+			# Grab the OpenVPN subnet.
+			my $ovpnsubnet = $ovpnsettings{'DOVPN_SUBNET'};
+
+			# Add the subnet to the networks hash.
+			$networks{$ovpnsubnet} = ["$Lang::tr{'ovpn'}", "$Header::colourvpn"];
+		}
+	}
+
+	# Add OpenVPN subnets for CCD connections.
 	if (-e "${General::swroot}/ovpn/ccd.conf") {
 		# Open the config file.
 		open(OVPNSUB, "${General::swroot}/ovpn/ccd.conf");
